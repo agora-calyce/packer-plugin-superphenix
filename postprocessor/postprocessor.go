@@ -52,8 +52,8 @@ type Config struct {
 	// Storage class of the helper's boot disk. Defaults to the AZ default.
 	StorageClass string `mapstructure:"storage_class"`
 
-	// Subnet the helper is attached to. Required with `eip_eid`.
-	SubnetEID string `mapstructure:"subnet_eid"`
+	// Subnet the helper is attached to.
+	SubnetEID string `mapstructure:"subnet_eid" required:"true"`
 	// Effective ID of a pre-allocated EIP. When set, the helper is exposed
 	// through this EIP and a security group that only allows SSH from
 	// `runner_cidr`. When empty, the helper's private IP is used, which
@@ -97,13 +97,13 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 		errs = append(errs, errors.New("output_path is required"))
 	}
 	for k, v := range map[string]string{"helper_image_url": c.HelperImageURL, "api_url": c.APIURL,
-		"org_id": c.OrgID, "az": c.AZ, "project_id": c.ProjectID, "token": c.Token} {
+		"org_id": c.OrgID, "az": c.AZ, "project_id": c.ProjectID, "token": c.Token, "subnet_eid": c.SubnetEID} {
 		if v == "" {
 			errs = append(errs, fmt.Errorf("%s is required", k))
 		}
 	}
-	if c.EIPEID != "" && (c.SubnetEID == "" || c.RunnerCIDR == "") {
-		errs = append(errs, errors.New("eip_eid requires subnet_eid and runner_cidr"))
+	if c.EIPEID != "" && c.RunnerCIDR == "" {
+		errs = append(errs, errors.New("eip_eid requires runner_cidr"))
 	}
 	if p.transfer == nil {
 		p.transfer = sshFetch
@@ -185,14 +185,12 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 		Compute: client.Compute{CPU: c.HelperCPU, Memory: c.HelperMemory},
 		Disks: []client.Disk{
 			{Order: 0, Disk: &client.CreateDiskInfo{General: client.DiskGeneral{
-				Source: client.DiskSource{Type: "Http", URL: c.HelperImageURL}, Storage: c.HelperDiskSize, StorageClass: c.StorageClass}}},
+				Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: c.HelperDiskSize, StorageClass: c.StorageClass}}},
 			{Order: 1, EID: diskID},
 		},
 		General: client.General{RunStrategy: "Always", Labels: []string{label}},
 	}
-	if c.SubnetEID != "" {
-		spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}}
-	}
+	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
 	ui.Say("Creating export helper VM...")
 	var helper client.Instance
 	if err := api.CreateInstance(ctx, spec, &helper); err != nil {

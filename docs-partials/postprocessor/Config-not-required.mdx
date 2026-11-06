@@ -13,8 +13,6 @@
 
 - `storage_class` (string) - Storage class of the helper's boot disk. Defaults to the AZ default.
 
-- `subnet_eid` (string) - Subnet the helper is attached to. Required with `eip_eid`.
-
 - `eip_eid` (string) - Effective ID of a pre-allocated EIP. When set, the helper is exposed
   through this EIP and a security group that only allows SSH from
   `runner_cidr`. When empty, the helper's private IP is used, which

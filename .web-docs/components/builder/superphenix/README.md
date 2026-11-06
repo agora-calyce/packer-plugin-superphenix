@@ -35,6 +35,9 @@ alphabetized.
 - `source_url` (string) - URL of the cloud image used to create the boot disk (an `Http` disk
   source). ISO sources are not supported yet.
 
+- `subnet_eid` (string) - Effective ID of the subnet the VM is attached to. The machine running
+  Packer must be able to reach the VM's IP address.
+
 <!-- End of code generated from the comments of the Config struct in builder/builder.go; -->
 
 
@@ -49,9 +52,6 @@ alphabetized.
 - `disk_size` (string) - Size of the boot disk, for example `20Gi`. Defaults to `20Gi`.
 
 - `storage_class` (string) - Storage class of the boot disk. Defaults to the AZ default.
-
-- `subnet_eid` (string) - Effective ID of the subnet the VM is attached to. The machine running
-  Packer must be able to reach the VM's IP address.
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
@@ -234,5 +234,5 @@ build {
 
 ## Limitations
 
-- Only cloud images (`Http` disk source) are supported. ISO installation is not supported yet.
+- Only cloud images (`http` disk source) are supported. ISO installation is not supported yet.
 - Only the SSH communicator is supported. WinRM is not supported yet.

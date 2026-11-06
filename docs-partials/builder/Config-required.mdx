@@ -14,4 +14,7 @@
 - `source_url` (string) - URL of the cloud image used to create the boot disk (an `Http` disk
   source). ISO sources are not supported yet.
 
+- `subnet_eid` (string) - Effective ID of the subnet the VM is attached to. The machine running
+  Packer must be able to reach the VM's IP address.
+
 <!-- End of code generated from the comments of the Config struct in builder/builder.go; -->

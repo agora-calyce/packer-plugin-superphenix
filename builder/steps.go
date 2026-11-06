@@ -31,13 +31,11 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 		Disks:   []client.Disk{{Order: 0, EID: ""}}, // EID renseigné après création du disque
 		General: client.General{VMType: c.VMType, RunStrategy: "Always", Labels: []string{"packer"}},
 	}
-	if c.SubnetEID != "" {
-		spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}}
-	}
+	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
 
 	ui.Say("Creating boot disk...")
 	diskID, err := api.CreateDisk(ctx, client.CreateDiskInfo{General: client.DiskGeneral{
-		Source: client.DiskSource{Type: "Http", URL: c.SourceURL}, Storage: c.DiskSize, StorageClass: c.StorageClass}})
+		Source: client.DiskSource{Type: "http", URL: c.SourceURL}, Storage: c.DiskSize, StorageClass: c.StorageClass}})
 	if err != nil {
 		return fail(state, err)
 	}

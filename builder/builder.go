@@ -48,7 +48,7 @@ type Config struct {
 	StorageClass string `mapstructure:"storage_class"`
 	// Effective ID of the subnet the VM is attached to. The machine running
 	// Packer must be able to reach the VM's IP address.
-	SubnetEID string `mapstructure:"subnet_eid"`
+	SubnetEID string `mapstructure:"subnet_eid" required:"true"`
 	// VM type (size preset), if your AZ defines some.
 	VMType string `mapstructure:"vm_type"`
 }
@@ -77,7 +77,7 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	}
 	var errs []error
 	for k, v := range map[string]string{"api_url": c.APIURL, "org_id": c.OrgID, "az": c.AZ,
-		"project_id": c.ProjectID, "token": c.Token, "source_url": c.SourceURL} {
+		"project_id": c.ProjectID, "token": c.Token, "source_url": c.SourceURL, "subnet_eid": c.SubnetEID} {
 		if v == "" {
 			errs = append(errs, fmt.Errorf("%s is required", k))
 		}

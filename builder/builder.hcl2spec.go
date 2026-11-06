@@ -79,7 +79,7 @@ type FlatConfig struct {
 	Memory                    *string           `mapstructure:"memory" cty:"memory" hcl:"memory"`
 	DiskSize                  *string           `mapstructure:"disk_size" cty:"disk_size" hcl:"disk_size"`
 	StorageClass              *string           `mapstructure:"storage_class" cty:"storage_class" hcl:"storage_class"`
-	SubnetEID                 *string           `mapstructure:"subnet_eid" cty:"subnet_eid" hcl:"subnet_eid"`
+	SubnetEID                 *string           `mapstructure:"subnet_eid" required:"true" cty:"subnet_eid" hcl:"subnet_eid"`
 	VMType                    *string           `mapstructure:"vm_type" cty:"vm_type" hcl:"vm_type"`
 }
 

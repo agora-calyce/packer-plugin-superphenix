@@ -139,10 +139,10 @@ func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
 }
 
 // SetEIPTarget associe l'EIP (pré-alloué) à une IP interne ; "" la libère.
-// POST /eip = eip.UpdateEIPInfo (spec.internalIP).
+// POST /eip/{eid} = eip.UpdateEipBody (spec.internalIP).
 func (c *Client) SetEIPTarget(ctx context.Context, eipEID, internalIP string) error {
-	body := map[string]any{"resourceEffectiveID": eipEID, "spec": map[string]any{"internalIP": internalIP}}
-	return c.Call(ctx, "POST", "eip", body, nil)
+	body := map[string]any{"spec": map[string]any{"internalIP": internalIP}}
+	return c.Call(ctx, "POST", "eip/"+eipEID, body, nil)
 }
 
 // EIPAddress lit l'IP publique (eip.status.ip, v1.IptablesEIPStatus).
@@ -166,13 +166,15 @@ func (c *Client) EIPAddress(ctx context.Context, eipEID string) (string, error) 
 // AllowSSH crée une SG autorisant tcp/22 depuis cidr vers les instances portant label key=value.
 func (c *Client) AllowSSH(ctx context.Context, subnetEID, key, value, cidr string) (string, error) {
 	body := map[string]any{
-		"description": "packer export helper",
-		"subnetEIds":  []string{subnetEID},
-		"target":      map[string]any{"matchLabels": []map[string]string{{"key": key, "value": value}}},
-		"ingress": []map[string]any{{
-			"from":  []map[string]any{{"IPBlock": map[string]any{"CIDR": cidr}}},
-			"ports": []map[string]any{{"protocol": "TCP", "port": 22}},
-		}},
+		"general": map[string]any{"description": "packer export helper"},
+		"spec": map[string]any{
+			"subnetEIds": []string{subnetEID},
+			"target":     map[string]any{"matchLabels": []map[string]string{{"key": key, "value": value}}},
+			"ingress": []map[string]any{{
+				"from":  []map[string]any{{"IPBlock": map[string]any{"CIDR": cidr}}},
+				"ports": []map[string]any{{"protocol": "TCP", "port": 22}},
+			}},
+		},
 	}
 	var out EIDResponse
 	if err := c.Call(ctx, "POST", "security-group", body, &out); err != nil {

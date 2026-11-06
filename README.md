@@ -56,7 +56,7 @@ Reference documentation:
 
 ## Known limitations
 
-- Cloud images only (`Http` disk source); no ISO installation.
+- Cloud images only (`http` disk source); no ISO installation.
 - SSH only; no WinRM, so no Windows images yet.
 - The helper's SSH host key is not verified (the helper is ephemeral).
 - Superphenix API behaviors not yet confirmed against a live environment: response bodies of the create calls,
