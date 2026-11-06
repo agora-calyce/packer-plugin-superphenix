@@ -24,6 +24,10 @@ func run(t *testing.T, transferErr error) []string {
 		switch {
 		case r.Method == "DELETE" && strings.HasSuffix(r.URL.Path, "/instance/i1"):
 			// la VM Packer a déjà été supprimée par un appel précédent ? non : premier appel OK
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/disk/b1"):
+			w.Write([]byte(`{"disk":{"status":{"phase":"Succeeded"}}}`))
+		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/disk"):
+			w.Write([]byte(`{"eid":"b1"}`)) // disque de boot du helper
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/security-group"):
 			w.Write([]byte(`{"eid":"sg1"}`))
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/instance"):
@@ -62,7 +66,7 @@ func TestExportOrderAndCleanup(t *testing.T) {
 		for _, want := range []string{
 			"GET disk/d1/unmount,DELETE instance/i1", // détache puis supprime la VM Packer
 			"POST security-group", "POST eip",
-			"DELETE security-group/sg1", "DELETE instance/h1", "DELETE disk/d1",
+			"DELETE security-group/sg1", "DELETE instance/h1", "DELETE disk/d1", "DELETE disk/b1", // b1 = boot du helper, supprimé explicitement
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("transferErr=%v: missing %q in %s", terr, want, got)

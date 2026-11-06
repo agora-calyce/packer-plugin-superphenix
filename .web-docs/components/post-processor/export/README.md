@@ -65,7 +65,9 @@ key is not known in advance. Limit access with `runner_cidr`.
 
 - `helper_ssh_username` (string) - SSH user of the helper image. Defaults to `spx`.
 
-- `disk_device` (string) - Device of the exported disk inside the helper. Defaults to `/dev/vdb`.
+- `disk_device` (string) - Device of the exported disk inside the helper, for example `/dev/vdb`.
+  Detected automatically by default: the disk that is neither the
+  helper's boot disk nor the cloud-init disk.
 
 - `eip_eid` (string) - Effective ID of a pre-allocated EIP. When set, the helper is exposed
   through this EIP and a security group that only allows SSH from

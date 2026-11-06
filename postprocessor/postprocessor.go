@@ -48,7 +48,9 @@ type Config struct {
 	HelperDiskSize string `mapstructure:"helper_disk_size"`
 	// SSH user of the helper image. Defaults to `spx`.
 	HelperUser string `mapstructure:"helper_ssh_username"`
-	// Device of the exported disk inside the helper. Defaults to `/dev/vdb`.
+	// Device of the exported disk inside the helper, for example `/dev/vdb`.
+	// Detected automatically by default: the disk that is neither the
+	// helper's boot disk nor the cloud-init disk.
 	DiskDevice string `mapstructure:"disk_device"`
 	// Storage class of the helper's boot disk, for example `block-standard`.
 	StorageClass string `mapstructure:"storage_class" required:"true"`
@@ -89,9 +91,6 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 	}
 	if c.HelperUser == "" {
 		c.HelperUser = "spx"
-	}
-	if c.DiskDevice == "" {
-		c.DiskDevice = "/dev/vdb"
 	}
 	var errs []error
 	if c.OutputPath == "" {
@@ -193,14 +192,26 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 	if e != nil {
 		return e
 	}
+	// Disque de boot du helper créé à part (comme le builder) : supprimer la VM ne supprime pas ses disques.
+	bootID, e := api.CreateDisk(ctx, client.CreateDiskInfo{General: client.DiskGeneral{
+		Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: helperSize, StorageClass: c.StorageClass}})
+	if e != nil {
+		return e
+	}
+	defer cleanup("helper boot disk", func() error { return api.DeleteDiskIfExists(bg, bootID) })
+	ui.Say("Waiting for the helper image import...")
+	ictx, icancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer icancel()
+	if e := api.WaitDiskReady(ictx, bootID, 5*time.Second); e != nil {
+		return e
+	}
 	label := fmt.Sprintf("packer-helper-%d", time.Now().Unix())
 	spec := client.CreateVMInfo{
 		CloudInit: &client.CloudInit{Custom: true, Bus: "virtio",
 			Config: client.UserCloudInit(c.HelperUser, string(ssh.MarshalAuthorizedKey(sshPub)), "qemu-utils")},
 		Compute: client.Compute{CPU: c.HelperCPU, Memory: helperMem},
 		Disks: []client.Disk{
-			{Order: 0, Bus: "virtio", Disk: &client.CreateDiskInfo{General: client.DiskGeneral{
-				Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: helperSize, StorageClass: c.StorageClass}}},
+			{Order: 0, Bus: "virtio", EID: bootID},
 			{Order: 1, Bus: "virtio", EID: diskID},
 		},
 		General: client.General{RunStrategy: "Always", Labels: []string{client.CreatedByLabel(label)}},

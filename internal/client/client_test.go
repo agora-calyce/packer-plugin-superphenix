@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCall(t *testing.T) {
@@ -71,5 +72,32 @@ func TestUserCloudInit(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("%q absent de :\n%s", want, got)
 		}
+	}
+}
+
+func TestDeleteDiskRetriesWhileMounted(t *testing.T) {
+	mountedRetry = time.Millisecond
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls++; calls < 3 {
+			http.Error(w, `{"reason":"Cannot delete mounted disk"}`, 500)
+		}
+	}))
+	defer srv.Close()
+	if err := New(srv.URL, "o", "az", "p", "t").DeleteDiskIfExists(context.Background(), "d"); err != nil || calls != 3 {
+		t.Fatalf("3 appels sans erreur attendus, obtenu %d appels, err=%v", calls, err)
+	}
+}
+
+func TestWaitDiskReady(t *testing.T) {
+	phases := []string{"Running", "Succeeded"}
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"disk":{"status":{"phase":"` + phases[min(n, 1)] + `"}}}`))
+		n++
+	}))
+	defer srv.Close()
+	if err := New(srv.URL, "o", "az", "p", "t").WaitDiskReady(context.Background(), "d", time.Millisecond); err != nil || n != 2 {
+		t.Fatalf("2 appels attendus sans erreur, obtenu %d, err=%v", n, err)
 	}
 }

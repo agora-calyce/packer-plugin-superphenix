@@ -167,12 +167,27 @@ func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, erro
 	return out.EID, nil
 }
 
-// DeleteDiskIfExists ignore les 404 : le disque a pu partir avec sa VM.
+// mountedRetry : délai entre deux essais tant que le disque est encore monté.
+var mountedRetry = 5 * time.Second
+
+// DeleteDiskIfExists ignore les 404 et réessaie (3 min max) tant que l'API répond "mounted" :
+// la suppression d'une VM est asynchrone, son disque reste monté un moment.
 func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
-	if err := c.DeleteDisk(ctx, id); err != nil && !IsNotFound(err) {
-		return err
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		err := c.DeleteDisk(ctx, id)
+		if err == nil || IsNotFound(err) {
+			return nil
+		}
+		if !strings.Contains(err.Error(), "mounted") || time.Now().After(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(mountedRetry):
+		}
 	}
-	return nil
 }
 
 // SetEIPTarget associe l'EIP (pré-alloué) à une IP interne ; "" la libère.
@@ -225,6 +240,36 @@ func (c *Client) AllowSSH(ctx context.Context, subnetEID, key, value, cidr strin
 
 func (c *Client) DeleteSecurityGroup(ctx context.Context, id string) error {
 	return c.Call(ctx, "DELETE", "security-group/"+id, nil, nil)
+}
+
+// WaitDiskReady attend la fin de l'import du disque (phase "Succeeded"). Sans cela, une VM qui démarre
+// avant la fin de l'import ne trouve rien de bootable et peut démarrer sur un autre disque.
+func (c *Client) WaitDiskReady(ctx context.Context, id string, every time.Duration) error {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		var d struct {
+			Disk struct {
+				Status struct {
+					Phase string `json:"phase"`
+				} `json:"status"`
+			} `json:"disk"`
+		}
+		if err := c.Call(ctx, "GET", "disk/"+id, nil, &d); err != nil {
+			return err
+		}
+		switch d.Disk.Status.Phase {
+		case "Succeeded":
+			return nil
+		case "Failed":
+			return errors.New("disk " + id + ": import failed")
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Join(ctx.Err(), errors.New("waiting for disk import"))
+		case <-t.C:
+		}
+	}
 }
 
 // WaitStopped attend que la VM soit "Stopped" (le endpoint stop rend la main avant l'arrêt effectif).
