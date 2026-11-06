@@ -9,7 +9,8 @@ the VM to get an IP address, connects over SSH, runs the provisioners, then stop
 that the [superphenix-export](/packer/integrations/agora-calyce/superphenix/latest/components/post-processor/export)
 post-processor can export its disk. If the build fails or is cancelled, the VM and its disk are deleted.
 
-The machine running Packer must be able to reach the VM's IP address over SSH.
+The machine running Packer must be able to reach the VM's **private** IP address over SSH, since the builder
+does not expose the VM publicly. In practice, run Packer on a VM inside the subnet (or behind a VPN).
 
 ## Configuration Reference
 
@@ -62,8 +63,9 @@ alphabetized.
 
 ### Communicator
 
-The builder supports the SSH communicator. The default SSH user is `spx`, the default user of Superphenix
-cloud images. A temporary key pair is generated for each build and injected through cloud-init.
+The builder supports the SSH communicator. The default SSH user is `spx`. A temporary key pair is generated
+for each build, and a cloud-init configuration creates that user (with passwordless `sudo`) and authorizes the
+key. This custom cloud-init replaces the default one of Superphenix.
 
 <!-- Code generated from the comments of the Config struct in communicator/config.go; DO NOT EDIT MANUALLY -->
 

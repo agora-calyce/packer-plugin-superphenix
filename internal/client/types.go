@@ -149,13 +149,13 @@ func (c *Client) WaitIP(ctx context.Context, id string, every time.Duration) (st
 	}
 }
 
-// --- Disque, EIP, Security Group (flux 3b) ---
+// --- Disque ---
 
 type EIDResponse struct {
 	EID string `json:"eid"`
 }
 
-// CreateDisk : POST /disk. La réponse doit contenir l'eid (non confirmé par la spec).
+// CreateDisk : POST /disk, la réponse contient l'eid.
 func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, error) {
 	var out EIDResponse
 	if err := c.Call(ctx, "POST", "disk", d, &out); err != nil {
@@ -188,58 +188,6 @@ func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
 		case <-time.After(mountedRetry):
 		}
 	}
-}
-
-// SetEIPTarget associe l'EIP (pré-alloué) à une IP interne ; "" la libère.
-// POST /eip/{eid} = eip.UpdateEipBody (spec.internalIP).
-func (c *Client) SetEIPTarget(ctx context.Context, eipEID, internalIP string) error {
-	body := map[string]any{"spec": map[string]any{"internalIP": internalIP}}
-	return c.Call(ctx, "POST", "eip/"+eipEID, body, nil)
-}
-
-// EIPAddress lit l'IP publique (eip.status.ip, v1.IptablesEIPStatus).
-func (c *Client) EIPAddress(ctx context.Context, eipEID string) (string, error) {
-	var out struct {
-		EIP struct {
-			Status struct {
-				IP string `json:"ip"`
-			} `json:"status"`
-		} `json:"eip"`
-	}
-	if err := c.Call(ctx, "GET", "eip/"+eipEID, nil, &out); err != nil {
-		return "", err
-	}
-	if out.EIP.Status.IP == "" {
-		return "", errors.New("eip " + eipEID + ": no public ip in status")
-	}
-	return out.EIP.Status.IP, nil
-}
-
-// AllowSSH crée une SG autorisant tcp/22 depuis cidr vers les instances portant label key=value.
-func (c *Client) AllowSSH(ctx context.Context, subnetEID, key, value, cidr string) (string, error) {
-	body := map[string]any{
-		"general": map[string]any{"description": "packer export helper"},
-		"spec": map[string]any{
-			"subnetEIds": []string{subnetEID},
-			"target":     map[string]any{"matchLabels": []map[string]string{{"key": key, "value": value}}},
-			"ingress": []map[string]any{{
-				"from":  []map[string]any{{"IPBlock": map[string]any{"CIDR": cidr}}},
-				"ports": []map[string]any{{"protocol": "TCP", "port": 22, "endPort": 22}}, // endPort requis : 0 est rejeté par le NetworkPolicy
-			}},
-		},
-	}
-	var out EIDResponse
-	if err := c.Call(ctx, "POST", "security-group", body, &out); err != nil {
-		return "", err
-	}
-	if out.EID == "" {
-		return "", errors.New("create security group: response has no eid")
-	}
-	return out.EID, nil
-}
-
-func (c *Client) DeleteSecurityGroup(ctx context.Context, id string) error {
-	return c.Call(ctx, "DELETE", "security-group/"+id, nil, nil)
 }
 
 // WaitDiskReady attend la fin de l'import du disque (phase "Succeeded"). Sans cela, une VM qui démarre

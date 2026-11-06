@@ -55,16 +55,9 @@ type Config struct {
 	// Storage class of the helper's boot disk, for example `block-standard`.
 	StorageClass string `mapstructure:"storage_class" required:"true"`
 
-	// Subnet the helper is attached to.
+	// Subnet the helper is attached to. The machine running Packer must be able
+	// to reach the helper's private IP address, as it does for the builder.
 	SubnetEID string `mapstructure:"subnet_eid" required:"true"`
-	// Effective ID of a pre-allocated EIP. When set, the helper is exposed
-	// through this EIP and a security group that only allows SSH from
-	// `runner_cidr`. When empty, the helper's private IP is used, which
-	// requires the machine running Packer to be inside the network.
-	EIPEID string `mapstructure:"eip_eid"`
-	// CIDR allowed to reach the helper over SSH, typically the outgoing
-	// address of the CI runner as a `/32`. Required with `eip_eid`.
-	RunnerCIDR string `mapstructure:"runner_cidr"`
 }
 
 type PostProcessor struct {
@@ -101,9 +94,6 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 		if v == "" {
 			errs = append(errs, fmt.Errorf("%s is required", k))
 		}
-	}
-	if c.EIPEID != "" && c.RunnerCIDR == "" {
-		errs = append(errs, errors.New("eip_eid requires runner_cidr"))
 	}
 	if _, err := client.GiB(c.HelperDiskSize); err != nil {
 		errs = append(errs, fmt.Errorf("helper_disk_size: %w", err))
@@ -235,23 +225,8 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 		return err
 	}
 
-	// 4. Exposition : EIP + SG (tcp/22 depuis runner_cidr), ou IP privée.
+	// 4. Le runner est dans le réseau : IP privée du helper (comme pour le builder).
 	host := ip
-	if c.EIPEID != "" {
-		// label système posé par Superphenix : identifie la VM par son eid (nos labels libres ne sont pas exposés).
-		sg, err := api.AllowSSH(ctx, c.SubnetEID, "superphenix.net/resourceEffectiveID", helper.EID, c.RunnerCIDR)
-		if err != nil {
-			return err
-		}
-		defer cleanup("security group", func() error { return api.DeleteSecurityGroup(bg, sg) })
-		if err := api.SetEIPTarget(ctx, c.EIPEID, ip); err != nil {
-			return err
-		}
-		defer cleanup("eip", func() error { return api.SetEIPTarget(bg, c.EIPEID, "") })
-		if host, err = api.EIPAddress(ctx, c.EIPEID); err != nil {
-			return err
-		}
-	}
 
 	// 5. Conversion + récupération.
 	ui.Say(fmt.Sprintf("Converting and downloading qcow2 from %s...", host))

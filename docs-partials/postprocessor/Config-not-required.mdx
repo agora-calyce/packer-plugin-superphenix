@@ -14,12 +14,4 @@
   Detected automatically by default: the disk that is neither the
   helper's boot disk nor the cloud-init disk.
 
-- `eip_eid` (string) - Effective ID of a pre-allocated EIP. When set, the helper is exposed
-  through this EIP and a security group that only allows SSH from
-  `runner_cidr`. When empty, the helper's private IP is used, which
-  requires the machine running Packer to be inside the network.
-
-- `runner_cidr` (string) - CIDR allowed to reach the helper over SSH, typically the outgoing
-  address of the CI runner as a `/32`. Required with `eip_eid`.
-
 <!-- End of code generated from the comments of the Config struct in postprocessor/postprocessor.go; -->

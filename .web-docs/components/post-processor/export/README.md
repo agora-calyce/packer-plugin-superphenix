@@ -11,17 +11,18 @@ through a short-lived helper VM:
 1. The disk of the built VM is detached and the built VM is deleted.
 2. A helper VM is created from `helper_image_url`, with the detached disk attached as a second disk.
    Its cloud-init installs `qemu-utils` and authorizes a temporary SSH key.
-3. If `eip_eid` is set, a security group allowing only SSH from `runner_cidr` is created and the EIP is
-   associated with the helper. Otherwise the helper's private IP is used.
-4. Over SSH, the helper runs `qemu-img convert -f raw -O qcow2` on the disk, and the file is downloaded to
-   `output_path`.
-5. The helper, its disk, the security group and the EIP association are removed, including when a step fails.
+3. The post-processor waits for the helper's boot disk to be imported before starting the helper, then
+   connects to its private IP, as the builder does.
+4. Over SSH, the helper runs `qemu-img convert -O qcow2` on the exported disk (detected automatically, or
+   `disk_device`), and the file is downloaded to `output_path`. An interrupted download is resumed.
+5. The helper and its disks are removed, including when a step fails or the build is cancelled.
 
 The built VM, the helper and the exported disk are all deleted at the end of the post-processor. Only the
 `qcow2` file remains.
 
-~> **Note:** SSH host keys of the helper are not verified, since the helper is created for the occasion and its
-key is not known in advance. Limit access with `runner_cidr`.
+~> **Note:** the machine running Packer must reach the private IP of the helper, so it must run inside the
+Superphenix network (a VM in the subnet, or behind a VPN). SSH host keys of the helper are not verified, since
+the helper is created for the occasion and its key is not known in advance.
 
 ## Configuration Reference
 
@@ -46,7 +47,8 @@ key is not known in advance. Limit access with `runner_cidr`.
 
 - `storage_class` (string) - Storage class of the helper's boot disk, for example `block-standard`.
 
-- `subnet_eid` (string) - Subnet the helper is attached to.
+- `subnet_eid` (string) - Subnet the helper is attached to. The machine running Packer must be able
+  to reach the helper's private IP address, as it does for the builder.
 
 <!-- End of code generated from the comments of the Config struct in postprocessor/postprocessor.go; -->
 
@@ -69,14 +71,6 @@ key is not known in advance. Limit access with `runner_cidr`.
   Detected automatically by default: the disk that is neither the
   helper's boot disk nor the cloud-init disk.
 
-- `eip_eid` (string) - Effective ID of a pre-allocated EIP. When set, the helper is exposed
-  through this EIP and a security group that only allows SSH from
-  `runner_cidr`. When empty, the helper's private IP is used, which
-  requires the machine running Packer to be inside the network.
-
-- `runner_cidr` (string) - CIDR allowed to reach the helper over SSH, typically the outgoing
-  address of the CI runner as a `/32`. Required with `eip_eid`.
-
 <!-- End of code generated from the comments of the Config struct in postprocessor/postprocessor.go; -->
 
 
@@ -94,8 +88,6 @@ post-processor "superphenix-export" {
   helper_image_url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
   subnet_eid       = var.subnet_eid
   storage_class    = "block-standard"
-  eip_eid          = var.eip_eid
-  runner_cidr      = "198.51.100.10/32"
 }
 ```
 
@@ -117,5 +109,5 @@ build-image:
   resource_group: superphenix-packer
 ```
 
-Set `PKR_VAR_token` as a masked CI/CD variable. Use `resource_group` so that only one build uses the EIP at a
-time.
+Set `PKR_VAR_token` as a masked CI/CD variable. The GitLab runner must be able to reach the private IPs of the
+subnet (runner hosted in the subnet, or VPN). Use `resource_group` to run one build at a time.

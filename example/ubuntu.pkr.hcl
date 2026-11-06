@@ -16,8 +16,6 @@ variable "token" {
   sensitive = true # injecté par la variable CI masquée PKR_VAR_token
 }
 variable "subnet_eid"  { type = string }
-variable "eip_eid"     { type = string } # EIP pré-allouée pour le helper d'export
-variable "runner_cidr" { type = string } # IP sortante du runner GitLab, ex. 198.51.100.10/32
 
 locals {
   image = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
@@ -59,7 +57,5 @@ build {
     helper_image_url = local.image
     subnet_eid       = var.subnet_eid
     storage_class    = "block-standard"
-    eip_eid          = var.eip_eid
-    runner_cidr      = var.runner_cidr
   }
 }

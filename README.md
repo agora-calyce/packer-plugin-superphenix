@@ -4,9 +4,9 @@ A [Packer](https://www.packer.io) plugin that builds machine images on a
 [Superphenix](https://github.com/super-phenix/superphenix) hypervisor and exports them as `qcow2` files, built
 to run in CI (for example GitLab CI).
 
-> **Status: early development.** The code is covered by unit tests against a fake API server only. It has not been
-> run against a real Superphenix environment yet, and several API behaviors are still assumptions (see
-> [DESIGN.md](DESIGN.md) and [Known limitations](#known-limitations)).
+> **Status: early development.** The builder and the export post-processor have been run end to end against a
+> Superphenix environment (Ubuntu cloud image, runner inside the subnet). Other images, AZs and API versions are
+> untested (see [DESIGN.md](DESIGN.md) and [Known limitations](#known-limitations)).
 
 ## Components
 
@@ -16,9 +16,8 @@ to run in CI (for example GitLab CI).
 | Post-processor | `superphenix-export` | Converts the VM disk to `qcow2` through a short-lived helper VM and downloads it. |
 
 Superphenix has no disk export endpoint, so the post-processor detaches the disk, attaches it to a helper VM
-that has `qemu-img`, converts it there, and fetches the file over SSH. The helper is exposed through a
-pre-allocated EIP and a security group restricted to the runner's address, and everything is cleaned up even
-when a step fails. Details: [DESIGN.md](DESIGN.md).
+that has `qemu-img`, converts it there, and fetches the file over SSH. Everything is cleaned up even when a step
+fails or the build is cancelled. Details: [DESIGN.md](DESIGN.md).
 
 ## Installation
 
@@ -49,18 +48,22 @@ Reference documentation:
 
 ## Requirements
 
-- A Superphenix API URL, organization, availability zone, project, and an API token.
-- Builder: the machine running Packer must reach the VM's IP address over SSH.
-- Post-processor: a pre-allocated EIP and the runner's outgoing CIDR (or run inside the network and use the
-  helper's private IP).
+- A Superphenix API URL, organization, availability zone, project, and an API token (created from the console
+  "API tokens" page, sent as `Authorization: api-token <token>`).
+- A subnet, and a storage class (the available ones are listed by `GET .../{az}/{project_id}/storage-class`).
+- The machine running Packer must reach the **private** IP of the VMs over SSH, for the builder and for the
+  export helper: run Packer on a VM inside the subnet, or behind a VPN. Exposing the VMs through an EIP is not
+  supported.
 
 ## Known limitations
 
 - Cloud images only (`http` disk source); no ISO installation.
 - SSH only; no WinRM, so no Windows images yet.
 - The helper's SSH host key is not verified (the helper is ephemeral).
-- Superphenix API behaviors not yet confirmed against a live environment: response bodies of the create calls,
-  EIP association (`POST /eip`), the security-group label selector, and detaching a boot disk with `unmount`.
+- The runner must be inside the Superphenix network (see Requirements).
+- Sizes follow the deployed API: `memory` is sent as a whole number of GiB (`4Gi`), and so is `disk_size`.
+  Newer API versions accept a quantity string for `memory`; this will need to follow when the API is upgraded.
+- Tested with one API version and one AZ (`fr01-als01`).
 
 ## Development
 

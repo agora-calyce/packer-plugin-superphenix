@@ -24,8 +24,6 @@ type FlatConfig struct {
 	DiskDevice     *string `mapstructure:"disk_device" cty:"disk_device" hcl:"disk_device"`
 	StorageClass   *string `mapstructure:"storage_class" required:"true" cty:"storage_class" hcl:"storage_class"`
 	SubnetEID      *string `mapstructure:"subnet_eid" required:"true" cty:"subnet_eid" hcl:"subnet_eid"`
-	EIPEID         *string `mapstructure:"eip_eid" cty:"eip_eid" hcl:"eip_eid"`
-	RunnerCIDR     *string `mapstructure:"runner_cidr" cty:"runner_cidr" hcl:"runner_cidr"`
 }
 
 // FlatMapstructure returns a new FlatConfig.
@@ -54,8 +52,6 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"disk_device":         &hcldec.AttrSpec{Name: "disk_device", Type: cty.String, Required: false},
 		"storage_class":       &hcldec.AttrSpec{Name: "storage_class", Type: cty.String, Required: false},
 		"subnet_eid":          &hcldec.AttrSpec{Name: "subnet_eid", Type: cty.String, Required: false},
-		"eip_eid":             &hcldec.AttrSpec{Name: "eip_eid", Type: cty.String, Required: false},
-		"runner_cidr":         &hcldec.AttrSpec{Name: "runner_cidr", Type: cty.String, Required: false},
 	}
 	return s
 }
