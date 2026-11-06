@@ -37,5 +37,5 @@ $ packer plugins install github.com/agora-calyce/superphenix
 
 ### Authentication
 
-Both components call the Superphenix API with a Bearer token. Pass it through a sensitive variable, for example
+Both components call the Superphenix API with an API token (`Authorization: api-token <token>`), created from the console "API tokens" page. Pass it through a sensitive variable, for example
 `PKR_VAR_token` set as a masked CI variable, and never write it in a template.

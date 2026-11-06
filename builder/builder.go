@@ -31,7 +31,8 @@ type Config struct {
 	AZ string `mapstructure:"az" required:"true"`
 	// ID of the project in which the VM is built.
 	ProjectID string `mapstructure:"project_id" required:"true"`
-	// API token, sent as a `Bearer` token. Pass it through a sensitive
+	// API token created from the console "API tokens" page, sent as
+	// `Authorization: api-token <token>`. Pass it through a sensitive
 	// variable (`PKR_VAR_token`) and never write it in the template.
 	Token string `mapstructure:"token" required:"true"`
 

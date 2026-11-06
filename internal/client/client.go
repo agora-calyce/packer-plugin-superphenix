@@ -39,7 +39,7 @@ func (c *Client) Call(ctx context.Context, method, resource string, in, out any)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Authorization", "api-token "+c.Token) // schéma des API tokens de la console
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

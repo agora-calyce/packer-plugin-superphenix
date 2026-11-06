@@ -4,7 +4,7 @@
 - Plugin Go (`packer-plugin-sdk`) : **builder** + **post-processor**.
 - Builder : crée la VM (source ISO ou cloud image `http`), provisionne via communicator (SSH Linux, WinRM Windows).
 - Post-processor : exporte le disque en qcow2 vers le runner GitLab (variante 3b).
-- Auth : token Bearer via variable CI masquée. Client HTTP écrit à la main (pas de SDK Go public).
+- Auth : API token (en-tête `Authorization: api-token <token>`, créé dans la console) via variable CI masquée. Client HTTP écrit à la main (pas de SDK Go public).
 - Distribution : GitHub Releases, `packer init`.
 
 ## API Superphenix utilisée
