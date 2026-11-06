@@ -22,3 +22,17 @@ func TestCall(t *testing.T) {
 		t.Fatal("erreur attendue sur réponse 400")
 	}
 }
+
+func TestDeleteDiskIfExists(t *testing.T) {
+	code := 404
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(code) }))
+	defer srv.Close()
+	c := New(srv.URL, "org", "az1", "proj", "tok")
+	if err := c.DeleteDiskIfExists(context.Background(), "d"); err != nil {
+		t.Fatalf("404 doit être ignoré : %v", err)
+	}
+	code = 500
+	if err := c.DeleteDiskIfExists(context.Background(), "d"); err == nil {
+		t.Fatal("erreur attendue sur 500")
+	}
+}

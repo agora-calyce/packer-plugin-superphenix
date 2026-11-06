@@ -32,6 +32,12 @@ func (a *Artifact) State(name string) interface{} {
 	}
 	return a.StateData[name]
 }
+
+// Destroy supprime VM puis disque ; 404 ignoré (le post-processor a pu déjà tout supprimer).
 func (a *Artifact) Destroy() error {
-	return a.Client.DeleteInstance(context.Background(), a.InstanceID)
+	ctx := context.Background()
+	if err := a.Client.DeleteInstance(ctx, a.InstanceID); err != nil && !client.IsNotFound(err) {
+		return err
+	}
+	return a.Client.DeleteDiskIfExists(ctx, a.DiskID)
 }

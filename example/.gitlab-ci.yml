@@ -7,7 +7,7 @@ stages: [build]
 build-image:
   stage: build
   image:
-    name: hashicorp/packer:latest
+    name: hashicorp/packer:1.11
     entrypoint: [""]
   variables:
     PACKER_PLUGIN_PATH: .packer.d/plugins

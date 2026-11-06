@@ -114,6 +114,11 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	if _, ok := state.GetOk(multistep.StateCancelled); ok {
 		return nil, errors.New("build cancelled")
 	}
-	return &Artifact{InstanceID: state.Get("instance_id").(string), DiskID: state.Get("disk_id").(string), Client: state.Get("client").(*client.Client),
+	instanceID, ok1 := state.Get("instance_id").(string)
+	diskID, ok2 := state.Get("disk_id").(string)
+	if !ok1 || !ok2 {
+		return nil, errors.New("build ended before the instance was created")
+	}
+	return &Artifact{InstanceID: instanceID, DiskID: diskID, Client: state.Get("client").(*client.Client),
 		StateData: map[string]interface{}{"generated_data": state.Get("generated_data")}}, nil
 }

@@ -14,7 +14,7 @@ import (
 type transferFunc func(ctx context.Context, ui packersdk.Ui, host, user string, signer ssh.Signer, dev, out string) error
 
 // sshFetch : attend cloud-init, convertit dev en qcow2 sur le helper, puis rapatrie le fichier via stdout SSH.
-func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ssh.Signer, dev, out string) error {
+func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ssh.Signer, dev, out string) (err error) {
 	cfg := &ssh.ClientConfig{User: user, Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, Timeout: 15 * time.Second,
 		// ponytail: pas de vérif de clé hôte (helper éphémère, clé inconnue d'avance), à durcir via console série si besoin.
 		HostKeyCallback: ssh.InsecureIgnoreHostKey()}
@@ -31,6 +31,9 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 		time.Sleep(5 * time.Second)
 	}
 	defer cli.Close()
+	// Ctrl-C : fermer la connexion interrompt sessions et téléchargement en cours.
+	stop := context.AfterFunc(ctx, func() { cli.Close() })
+	defer stop()
 
 	run := func(cmd string) error {
 		s, err := cli.NewSession()
@@ -55,15 +58,19 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		f.Close()
+		if err != nil {
+			os.Remove(out) // pas de qcow2 partiel
+		}
+	}()
 	s, err := cli.NewSession()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 	s.Stdout = f
-	if err := s.Run("cat /var/tmp/out.qcow2"); err != nil {
-		os.Remove(out)
+	if err = s.Run("cat /var/tmp/out.qcow2"); err != nil {
 		return fmt.Errorf("download qcow2: %w", err)
 	}
 	return nil

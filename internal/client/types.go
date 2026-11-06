@@ -114,13 +114,13 @@ func (c *Client) WaitIP(ctx context.Context, id string, every time.Duration) (st
 
 // --- Disque, EIP, Security Group (flux 3b) ---
 
-type Disk2 struct {
+type EIDResponse struct {
 	EID string `json:"eid"`
 }
 
 // CreateDisk : POST /disk. La réponse doit contenir l'eid (non confirmé par la spec).
 func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, error) {
-	var out Disk2
+	var out EIDResponse
 	if err := c.Call(ctx, "POST", "disk", d, &out); err != nil {
 		return "", err
 	}
@@ -130,7 +130,7 @@ func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, erro
 	return out.EID, nil
 }
 
-// DeleteDisk ignore les 404 : le disque a pu partir avec sa VM.
+// DeleteDiskIfExists ignore les 404 : le disque a pu partir avec sa VM.
 func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
 	if err := c.DeleteDisk(ctx, id); err != nil && !IsNotFound(err) {
 		return err
@@ -174,7 +174,7 @@ func (c *Client) AllowSSH(ctx context.Context, subnetEID, key, value, cidr strin
 			"ports": []map[string]any{{"protocol": "TCP", "port": 22}},
 		}},
 	}
-	var out Disk2
+	var out EIDResponse
 	if err := c.Call(ctx, "POST", "security-group", body, &out); err != nil {
 		return "", err
 	}
