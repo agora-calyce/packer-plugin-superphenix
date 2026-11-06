@@ -1,0 +1,26 @@
+<!-- Code generated from the comments of the Config struct in postprocessor/postprocessor.go; DO NOT EDIT MANUALLY -->
+
+- `helper_cpu` (int) - vCPUs of the helper VM. Defaults to `2`.
+
+- `helper_memory` (string) - Memory of the helper VM. Defaults to `2Gi`.
+
+- `helper_disk_size` (string) - Size of the helper's boot disk. It also holds the converted qcow2, so it
+  must be larger than the image produced. Defaults to `30Gi`.
+
+- `helper_ssh_username` (string) - SSH user of the helper image. Defaults to `spx`.
+
+- `disk_device` (string) - Device of the exported disk inside the helper. Defaults to `/dev/vdb`.
+
+- `storage_class` (string) - Storage class of the helper's boot disk. Defaults to the AZ default.
+
+- `subnet_eid` (string) - Subnet the helper is attached to. Required with `eip_eid`.
+
+- `eip_eid` (string) - Effective ID of a pre-allocated EIP. When set, the helper is exposed
+  through this EIP and a security group that only allows SSH from
+  `runner_cidr`. When empty, the helper's private IP is used, which
+  requires the machine running Packer to be inside the network.
+
+- `runner_cidr` (string) - CIDR allowed to reach the helper over SSH, typically the outgoing
+  address of the CI runner as a `/32`. Required with `eip_eid`.
+
+<!-- End of code generated from the comments of the Config struct in postprocessor/postprocessor.go; -->

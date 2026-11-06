@@ -1,0 +1,17 @@
+<!-- Code generated from the comments of the Config struct in builder/builder.go; DO NOT EDIT MANUALLY -->
+
+- `api_url` (string) - Base URL of the Superphenix API, for example `https://api.superphenix.example`.
+
+- `org_id` (string) - ID of the organization that owns the project.
+
+- `az` (string) - Availability zone in which the VM is built.
+
+- `project_id` (string) - ID of the project in which the VM is built.
+
+- `token` (string) - API token, sent as a `Bearer` token. Pass it through a sensitive
+  variable (`PKR_VAR_token`) and never write it in the template.
+
+- `source_url` (string) - URL of the cloud image used to create the boot disk (an `Http` disk
+  source). ISO sources are not supported yet.
+
+<!-- End of code generated from the comments of the Config struct in builder/builder.go; -->

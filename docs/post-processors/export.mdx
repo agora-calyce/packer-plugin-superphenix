@@ -1,0 +1,79 @@
+---
+description: >
+  The superphenix-export post-processor converts the disk of a built Superphenix VM to qcow2 and downloads it.
+page_title: Superphenix Export - Post-processors
+nav_title: Superphenix Export
+---
+
+# Superphenix Export Post-Processor
+
+Type: `superphenix-export`
+Artifact BuilderId: `agora-calyce.superphenix.export`
+
+The Superphenix API has no endpoint to download a disk. The `superphenix-export` post-processor therefore
+exports the disk of a VM built by the [superphenix builder](/packer/integrations/agora-calyce/superphenix/latest/components/builder/superphenix)
+through a short-lived helper VM:
+
+1. The disk of the built VM is detached and the built VM is deleted.
+2. A helper VM is created from `helper_image_url`, with the detached disk attached as a second disk.
+   Its cloud-init installs `qemu-utils` and authorizes a temporary SSH key.
+3. If `eip_eid` is set, a security group allowing only SSH from `runner_cidr` is created and the EIP is
+   associated with the helper. Otherwise the helper's private IP is used.
+4. Over SSH, the helper runs `qemu-img convert -f raw -O qcow2` on the disk, and the file is downloaded to
+   `output_path`.
+5. The helper, its disk, the security group and the EIP association are removed, including when a step fails.
+
+The built VM, the helper and the exported disk are all deleted at the end of the post-processor. Only the
+`qcow2` file remains.
+
+~> **Note:** SSH host keys of the helper are not verified, since the helper is created for the occasion and its
+key is not known in advance. Limit access with `runner_cidr`.
+
+## Configuration Reference
+
+### Required:
+
+@include 'postprocessor/Config-required.mdx'
+
+### Optional:
+
+@include 'postprocessor/Config-not-required.mdx'
+
+## Example
+
+```hcl
+post-processor "superphenix-export" {
+  api_url    = var.api_url
+  org_id     = var.org_id
+  az         = var.az
+  project_id = var.project_id
+  token      = var.token
+
+  output_path      = "output/ubuntu.qcow2"
+  helper_image_url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  subnet_eid       = var.subnet_eid
+  eip_eid          = var.eip_eid
+  runner_cidr      = "198.51.100.10/32"
+}
+```
+
+## Using it in GitLab CI
+
+Run Packer in a job and keep the file as a job artifact:
+
+```yaml
+build-image:
+  image:
+    name: hashicorp/packer:latest
+    entrypoint: [""]
+  script:
+    - mkdir -p output
+    - packer init .
+    - packer build -color=false .
+  artifacts:
+    paths: [output/ubuntu.qcow2]
+  resource_group: superphenix-packer
+```
+
+Set `PKR_VAR_token` as a masked CI/CD variable. Use `resource_group` so that only one build uses the EIP at a
+time.

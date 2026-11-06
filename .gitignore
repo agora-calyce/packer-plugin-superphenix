@@ -1,0 +1,5 @@
+packer-plugin-superphenix
+output/
+.docs/
+*.qcow2
+.packer.d/

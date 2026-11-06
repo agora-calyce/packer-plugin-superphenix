@@ -1,0 +1,76 @@
+---
+description: >
+  The superphenix builder creates a VM on a Superphenix hypervisor from a cloud image, provisions it, and
+  stops it, ready to be exported by the superphenix-export post-processor.
+page_title: Superphenix - Builders
+nav_title: Superphenix
+---
+
+# Superphenix Builder
+
+Type: `superphenix`
+Artifact BuilderId: `agora-calyce.superphenix`
+
+The `superphenix` builder creates a boot disk from a cloud image, creates a VM that boots from it, waits for
+the VM to get an IP address, connects over SSH, runs the provisioners, then stops the VM. The VM is kept so
+that the [superphenix-export](/packer/integrations/agora-calyce/superphenix/latest/components/post-processor/export)
+post-processor can export its disk. If the build fails or is cancelled, the VM and its disk are deleted.
+
+The machine running Packer must be able to reach the VM's IP address over SSH.
+
+## Configuration Reference
+
+There are many configuration options available for the builder. They are segmented below into two
+categories: required and optional parameters. Within each category, the available configuration keys are
+alphabetized.
+
+### Required:
+
+@include 'builder/Config-required.mdx'
+
+### Optional:
+
+@include 'builder/Config-not-required.mdx'
+
+### Communicator
+
+The builder supports the SSH communicator. The default SSH user is `spx`, the default user of Superphenix
+cloud images. A temporary key pair is generated for each build and injected through cloud-init.
+
+@include 'packer-plugin-sdk/communicator/Config-not-required.mdx'
+
+@include 'packer-plugin-sdk/communicator/SSH-not-required.mdx'
+
+## Example
+
+```hcl
+source "superphenix" "ubuntu" {
+  api_url    = var.api_url
+  org_id     = var.org_id
+  az         = var.az
+  project_id = var.project_id
+  token      = var.token
+
+  source_url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  cpu        = 2
+  memory     = "4Gi"
+  disk_size  = "20Gi"
+  subnet_eid = var.subnet_eid
+
+  communicator = "ssh"
+  ssh_username = "spx"
+}
+
+build {
+  sources = ["source.superphenix.ubuntu"]
+
+  provisioner "shell" {
+    inline = ["sudo apt-get update", "sudo apt-get install -y nginx"]
+  }
+}
+```
+
+## Limitations
+
+- Only cloud images (`Http` disk source) are supported. ISO installation is not supported yet.
+- Only the SSH communicator is supported. WinRM is not supported yet.
