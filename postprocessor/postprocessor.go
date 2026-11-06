@@ -212,7 +212,8 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 	// 4. Exposition : EIP + SG (tcp/22 depuis runner_cidr), ou IP privée.
 	host := ip
 	if c.EIPEID != "" {
-		sg, err := api.AllowSSH(ctx, c.SubnetEID, label, "", c.RunnerCIDR)
+		// label système posé par Superphenix : identifie la VM par son eid (nos labels libres ne sont pas exposés).
+		sg, err := api.AllowSSH(ctx, c.SubnetEID, "superphenix.net/resourceEffectiveID", helper.EID, c.RunnerCIDR)
 		if err != nil {
 			return err
 		}

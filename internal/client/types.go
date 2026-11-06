@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"net"
 	"time"
 )
 
@@ -71,17 +72,20 @@ type Instance struct {
 		Status struct {
 			Phase      string `json:"phase"`
 			Interfaces []struct {
-				IPAddress string `json:"ipAddress"`
+				IPAddress   string   `json:"ipAddress"`
+				IPAddresses []string `json:"ipAddresses"` // KubeVirt : liste, IPv6 incluse
 			} `json:"interfaces"`
 		} `json:"status"`
 	} `json:"vmi"`
 }
 
-// IP renvoie la première IP connue de l'instance, "" sinon.
+// IP renvoie la première IPv4 connue de l'instance (ipAddresses puis ipAddress), "" sinon.
 func (i *Instance) IP() string {
 	for _, n := range i.VMI.Status.Interfaces {
-		if n.IPAddress != "" {
-			return n.IPAddress
+		for _, a := range append(n.IPAddresses, n.IPAddress) {
+			if ip := net.ParseIP(a); ip != nil && ip.To4() != nil {
+				return a
+			}
 		}
 	}
 	return ""
@@ -172,7 +176,7 @@ func (c *Client) AllowSSH(ctx context.Context, subnetEID, key, value, cidr strin
 			"target":     map[string]any{"matchLabels": []map[string]string{{"key": key, "value": value}}},
 			"ingress": []map[string]any{{
 				"from":  []map[string]any{{"IPBlock": map[string]any{"CIDR": cidr}}},
-				"ports": []map[string]any{{"protocol": "TCP", "port": 22}},
+				"ports": []map[string]any{{"protocol": "TCP", "port": 22, "endPort": 22}}, // endPort requis : 0 est rejeté par le NetworkPolicy
 			}},
 		},
 	}

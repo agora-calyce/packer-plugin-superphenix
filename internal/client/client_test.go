@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,5 +35,18 @@ func TestDeleteDiskIfExists(t *testing.T) {
 	code = 500
 	if err := c.DeleteDiskIfExists(context.Background(), "d"); err == nil {
 		t.Fatal("erreur attendue sur 500")
+	}
+}
+
+func TestInstanceIP(t *testing.T) {
+	var i Instance
+	if err := json.Unmarshal([]byte(`{"vmi":{"status":{"interfaces":[{"ipAddresses":["fe80::1","10.0.0.2"]}]}}}`), &i); err != nil {
+		t.Fatal(err)
+	}
+	if got := i.IP(); got != "10.0.0.2" {
+		t.Fatalf("IPv4 de ipAddresses attendue, obtenu %q", got)
+	}
+	if (&Instance{}).IP() != "" {
+		t.Fatal("IP vide attendue sans interface")
 	}
 }
