@@ -3,7 +3,10 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -26,8 +29,8 @@ type CloudInit struct {
 	Custom bool   `json:"custom"`
 }
 type Compute struct {
-	CPU    int    `json:"cpu"`
-	Memory string `json:"memory"`
+	CPU    int `json:"cpu"`
+	Memory int `json:"memory"` // Gio
 }
 type General struct {
 	Labels      []string `json:"labels,omitempty"`
@@ -77,6 +80,36 @@ type Instance struct {
 			} `json:"interfaces"`
 		} `json:"status"`
 	} `json:"vmi"`
+}
+
+// CreatedByLabel : label libre accepté par l'API (préfixe user.superphenix.net/ obligatoire, format clé:valeur).
+func CreatedByLabel(value string) string { return "user.superphenix.net/created-by:" + value }
+
+// UserCloudInit génère une cloud-init personnalisée : "custom" remplace celle de Superphenix,
+// qui crée l'utilisateur spx. On recrée donc l'utilisateur SSH avec sudo sans mot de passe.
+func UserCloudInit(user, authorizedKey string, packages ...string) string {
+	s := "#cloud-config\n"
+	if len(packages) > 0 {
+		s += "packages: [" + strings.Join(packages, ", ") + "]\n"
+	}
+	return s + "users:\n  - name: " + user + "\n    groups: sudo\n    shell: /bin/bash\n" +
+		"    sudo: ['ALL=(ALL) NOPASSWD:ALL']\n    ssh_authorized_keys:\n      - " + strings.TrimSpace(authorizedKey) + "\n"
+}
+
+// GiB convertit "20Gi" ou "20" en "20" : l'API attend un entier en Gio, sans unité (max 5000).
+func GiB(size string) (string, error) {
+	n, err := GiBInt(size)
+	return strconv.Itoa(n), err
+}
+
+// GiBInt convertit "4Gi" ou "4" en 4. L'API déployée attend compute.memory en entier de Gio
+// (ponytail: les versions plus récentes de l'API attendent une quantité "4Gi", à revoir à la mise à jour).
+func GiBInt(size string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSuffix(size, "Gi"))
+	if err != nil || n < 1 || n > 5000 {
+		return 0, fmt.Errorf("invalid size %q: expected a whole number of GiB between 1 and 5000, for example 20Gi", size)
+	}
+	return n, nil
 }
 
 // IP renvoie la première IPv4 connue de l'instance (ipAddresses puis ipAddress), "" sinon.

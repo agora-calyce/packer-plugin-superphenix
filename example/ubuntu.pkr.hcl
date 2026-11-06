@@ -35,6 +35,7 @@ source "superphenix" "ubuntu" {
   memory     = "4Gi"
   disk_size  = "20Gi"
   subnet_eid = var.subnet_eid
+  storage_class = "block-standard"
 
   communicator = "ssh"
   ssh_username = "spx"
@@ -57,6 +58,7 @@ build {
     output_path      = "output/ubuntu.qcow2"
     helper_image_url = local.image
     subnet_eid       = var.subnet_eid
+    storage_class    = "block-standard"
     eip_eid          = var.eip_eid
     runner_cidr      = var.runner_cidr
   }

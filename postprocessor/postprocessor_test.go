@@ -46,7 +46,7 @@ func run(t *testing.T, transferErr error) []string {
 		return transferErr
 	}}
 	if err := p.Configure(map[string]any{"output_path": "/tmp/x.qcow2", "api_url": srv.URL, "org_id": "o", "az": "az", "project_id": "p", "token": "tok", "helper_image_url": "http://img",
-		"subnet_eid": "s1", "eip_eid": "e1", "runner_cidr": "198.51.100.0/24"}); err != nil {
+		"subnet_eid": "s1", "storage_class": "block-standard", "eip_eid": "e1", "runner_cidr": "198.51.100.0/24"}); err != nil {
 		t.Fatal(err)
 	}
 	err := p.export(context.Background(), &packersdk.MockUi{}, api, "i1", "d1")

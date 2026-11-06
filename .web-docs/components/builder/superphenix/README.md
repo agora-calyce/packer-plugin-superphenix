@@ -36,6 +36,9 @@ alphabetized.
 - `source_url` (string) - URL of the cloud image used to create the boot disk (an `Http` disk
   source). ISO sources are not supported yet.
 
+- `storage_class` (string) - Storage class of the boot disk, for example `block-standard`. The
+  available classes are listed by `GET .../{az}/{project_id}/storage-class`.
+
 - `subnet_eid` (string) - Effective ID of the subnet the VM is attached to. The machine running
   Packer must be able to reach the VM's IP address.
 
@@ -48,11 +51,9 @@ alphabetized.
 
 - `cpu` (int) - Number of vCPUs. Defaults to `2`.
 
-- `memory` (string) - Amount of memory, for example `4Gi`. Defaults to `4Gi`.
+- `memory` (string) - Amount of memory, a whole number of GiB such as `4Gi`. Defaults to `4Gi`.
 
-- `disk_size` (string) - Size of the boot disk, for example `20Gi`. Defaults to `20Gi`.
-
-- `storage_class` (string) - Storage class of the boot disk. Defaults to the AZ default.
+- `disk_size` (string) - Size of the boot disk, a whole number of GiB such as `20Gi`. Defaults to `20Gi`.
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
@@ -219,6 +220,7 @@ source "superphenix" "ubuntu" {
   memory     = "4Gi"
   disk_size  = "20Gi"
   subnet_eid = var.subnet_eid
+  storage_class = "block-standard"
 
   communicator = "ssh"
   ssh_username = "spx"

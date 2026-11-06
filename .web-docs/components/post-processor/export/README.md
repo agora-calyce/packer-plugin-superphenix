@@ -44,6 +44,8 @@ key is not known in advance. Limit access with `runner_cidr`.
 - `helper_image_url` (string) - URL of a Linux cloud image used for the helper VM. It must provide
   cloud-init and allow installing `qemu-utils` from its package manager.
 
+- `storage_class` (string) - Storage class of the helper's boot disk, for example `block-standard`.
+
 - `subnet_eid` (string) - Subnet the helper is attached to.
 
 <!-- End of code generated from the comments of the Config struct in postprocessor/postprocessor.go; -->
@@ -55,16 +57,15 @@ key is not known in advance. Limit access with `runner_cidr`.
 
 - `helper_cpu` (int) - vCPUs of the helper VM. Defaults to `2`.
 
-- `helper_memory` (string) - Memory of the helper VM. Defaults to `2Gi`.
+- `helper_memory` (string) - Memory of the helper VM, a whole number of GiB such as `2Gi`. Defaults to `2Gi`.
 
-- `helper_disk_size` (string) - Size of the helper's boot disk. It also holds the converted qcow2, so it
-  must be larger than the image produced. Defaults to `30Gi`.
+- `helper_disk_size` (string) - Size of the helper's boot disk, a whole number of GiB such as `30Gi`. It
+  also holds the converted qcow2, so it must be larger than the image
+  produced. Defaults to `30Gi`.
 
 - `helper_ssh_username` (string) - SSH user of the helper image. Defaults to `spx`.
 
 - `disk_device` (string) - Device of the exported disk inside the helper. Defaults to `/dev/vdb`.
-
-- `storage_class` (string) - Storage class of the helper's boot disk. Defaults to the AZ default.
 
 - `eip_eid` (string) - Effective ID of a pre-allocated EIP. When set, the helper is exposed
   through this EIP and a security group that only allows SSH from
@@ -90,6 +91,7 @@ post-processor "superphenix-export" {
   output_path      = "output/ubuntu.qcow2"
   helper_image_url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
   subnet_eid       = var.subnet_eid
+  storage_class    = "block-standard"
   eip_eid          = var.eip_eid
   runner_cidr      = "198.51.100.10/32"
 }

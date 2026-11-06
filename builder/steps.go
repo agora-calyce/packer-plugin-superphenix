@@ -24,18 +24,26 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 	api := state.Get("client").(*client.Client)
 	ui := state.Get("ui").(packersdk.Ui)
 
+	mem, err := client.GiBInt(c.Memory)
+	if err != nil {
+		return fail(state, err)
+	}
 	spec := client.CreateVMInfo{
-		CloudInit: &client.CloudInit{Custom: true,
-			Config: "#cloud-config\nssh_authorized_keys:\n  - " + string(c.Comm.SSHPublicKey)},
-		Compute: client.Compute{CPU: c.CPU, Memory: c.Memory},
-		Disks:   []client.Disk{{Order: 0, EID: ""}}, // EID renseigné après création du disque
-		General: client.General{VMType: c.VMType, RunStrategy: "Always", Labels: []string{"packer"}},
+		CloudInit: &client.CloudInit{Custom: true, Bus: "virtio",
+			Config: client.UserCloudInit(c.Comm.SSHUsername, string(c.Comm.SSHPublicKey))},
+		Compute: client.Compute{CPU: c.CPU, Memory: mem},
+		Disks:   []client.Disk{{Order: 0, Bus: "virtio", EID: ""}}, // EID renseigné après création du disque
+		General: client.General{VMType: c.VMType, RunStrategy: "Always", Labels: []string{client.CreatedByLabel("packer")}},
 	}
 	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
 
 	ui.Say("Creating boot disk...")
+	size, err := client.GiB(c.DiskSize)
+	if err != nil {
+		return fail(state, err)
+	}
 	diskID, err := api.CreateDisk(ctx, client.CreateDiskInfo{General: client.DiskGeneral{
-		Source: client.DiskSource{Type: "http", URL: c.SourceURL}, Storage: c.DiskSize, StorageClass: c.StorageClass}})
+		Source: client.DiskSource{Type: "http", URL: c.SourceURL}, Storage: size, StorageClass: c.StorageClass}})
 	if err != nil {
 		return fail(state, err)
 	}

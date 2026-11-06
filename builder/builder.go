@@ -41,12 +41,13 @@ type Config struct {
 	SourceURL string `mapstructure:"source_url" required:"true"`
 	// Number of vCPUs. Defaults to `2`.
 	CPU int `mapstructure:"cpu"`
-	// Amount of memory, for example `4Gi`. Defaults to `4Gi`.
+	// Amount of memory, a whole number of GiB such as `4Gi`. Defaults to `4Gi`.
 	Memory string `mapstructure:"memory"`
-	// Size of the boot disk, for example `20Gi`. Defaults to `20Gi`.
+	// Size of the boot disk, a whole number of GiB such as `20Gi`. Defaults to `20Gi`.
 	DiskSize string `mapstructure:"disk_size"`
-	// Storage class of the boot disk. Defaults to the AZ default.
-	StorageClass string `mapstructure:"storage_class"`
+	// Storage class of the boot disk, for example `block-standard`. The
+	// available classes are listed by `GET .../{az}/{project_id}/storage-class`.
+	StorageClass string `mapstructure:"storage_class" required:"true"`
 	// Effective ID of the subnet the VM is attached to. The machine running
 	// Packer must be able to reach the VM's IP address.
 	SubnetEID string `mapstructure:"subnet_eid" required:"true"`
@@ -78,10 +79,16 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	}
 	var errs []error
 	for k, v := range map[string]string{"api_url": c.APIURL, "org_id": c.OrgID, "az": c.AZ,
-		"project_id": c.ProjectID, "token": c.Token, "source_url": c.SourceURL, "subnet_eid": c.SubnetEID} {
+		"project_id": c.ProjectID, "token": c.Token, "source_url": c.SourceURL, "subnet_eid": c.SubnetEID, "storage_class": c.StorageClass} {
 		if v == "" {
 			errs = append(errs, fmt.Errorf("%s is required", k))
 		}
+	}
+	if _, err := client.GiB(c.DiskSize); err != nil {
+		errs = append(errs, fmt.Errorf("disk_size: %w", err))
+	}
+	if _, err := client.GiBInt(c.Memory); err != nil {
+		errs = append(errs, fmt.Errorf("memory: %w", err))
 	}
 	for _, e := range c.Comm.Prepare(&interpolate.Context{}) {
 		errs = append(errs, e)

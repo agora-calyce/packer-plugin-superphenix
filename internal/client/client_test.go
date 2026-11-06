@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +49,27 @@ func TestInstanceIP(t *testing.T) {
 	}
 	if (&Instance{}).IP() != "" {
 		t.Fatal("IP vide attendue sans interface")
+	}
+}
+
+func TestGiB(t *testing.T) {
+	for in, want := range map[string]string{"20Gi": "20", "20": "20", "5000Gi": "5000"} {
+		if got, err := GiB(in); err != nil || got != want {
+			t.Fatalf("GiB(%q) = %q, %v ; attendu %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "20G", "20Mi", "0", "5001Gi", "abc", "1.5Gi"} {
+		if _, err := GiB(bad); err == nil {
+			t.Fatalf("GiB(%q) devrait échouer", bad)
+		}
+	}
+}
+
+func TestUserCloudInit(t *testing.T) {
+	got := UserCloudInit("spx", "ssh-ed25519 AAAA\n", "qemu-utils")
+	for _, want := range []string{"#cloud-config\n", "packages: [qemu-utils]", "name: spx", "NOPASSWD", "- ssh-ed25519 AAAA\n"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("%q absent de :\n%s", want, got)
+		}
 	}
 }

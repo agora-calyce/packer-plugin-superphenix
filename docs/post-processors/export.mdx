@@ -52,6 +52,7 @@ post-processor "superphenix-export" {
   output_path      = "output/ubuntu.qcow2"
   helper_image_url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
   subnet_eid       = var.subnet_eid
+  storage_class    = "block-standard"
   eip_eid          = var.eip_eid
   runner_cidr      = "198.51.100.10/32"
 }

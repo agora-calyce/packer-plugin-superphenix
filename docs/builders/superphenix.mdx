@@ -56,6 +56,7 @@ source "superphenix" "ubuntu" {
   memory     = "4Gi"
   disk_size  = "20Gi"
   subnet_eid = var.subnet_eid
+  storage_class = "block-standard"
 
   communicator = "ssh"
   ssh_username = "spx"

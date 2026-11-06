@@ -2,16 +2,15 @@
 
 - `helper_cpu` (int) - vCPUs of the helper VM. Defaults to `2`.
 
-- `helper_memory` (string) - Memory of the helper VM. Defaults to `2Gi`.
+- `helper_memory` (string) - Memory of the helper VM, a whole number of GiB such as `2Gi`. Defaults to `2Gi`.
 
-- `helper_disk_size` (string) - Size of the helper's boot disk. It also holds the converted qcow2, so it
-  must be larger than the image produced. Defaults to `30Gi`.
+- `helper_disk_size` (string) - Size of the helper's boot disk, a whole number of GiB such as `30Gi`. It
+  also holds the converted qcow2, so it must be larger than the image
+  produced. Defaults to `30Gi`.
 
 - `helper_ssh_username` (string) - SSH user of the helper image. Defaults to `spx`.
 
 - `disk_device` (string) - Device of the exported disk inside the helper. Defaults to `/dev/vdb`.
-
-- `storage_class` (string) - Storage class of the helper's boot disk. Defaults to the AZ default.
 
 - `eip_eid` (string) - Effective ID of a pre-allocated EIP. When set, the helper is exposed
   through this EIP and a security group that only allows SSH from

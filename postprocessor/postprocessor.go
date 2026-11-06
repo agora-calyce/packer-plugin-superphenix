@@ -40,17 +40,18 @@ type Config struct {
 	HelperImageURL string `mapstructure:"helper_image_url" required:"true"`
 	// vCPUs of the helper VM. Defaults to `2`.
 	HelperCPU int `mapstructure:"helper_cpu"`
-	// Memory of the helper VM. Defaults to `2Gi`.
+	// Memory of the helper VM, a whole number of GiB such as `2Gi`. Defaults to `2Gi`.
 	HelperMemory string `mapstructure:"helper_memory"`
-	// Size of the helper's boot disk. It also holds the converted qcow2, so it
-	// must be larger than the image produced. Defaults to `30Gi`.
+	// Size of the helper's boot disk, a whole number of GiB such as `30Gi`. It
+	// also holds the converted qcow2, so it must be larger than the image
+	// produced. Defaults to `30Gi`.
 	HelperDiskSize string `mapstructure:"helper_disk_size"`
 	// SSH user of the helper image. Defaults to `spx`.
 	HelperUser string `mapstructure:"helper_ssh_username"`
 	// Device of the exported disk inside the helper. Defaults to `/dev/vdb`.
 	DiskDevice string `mapstructure:"disk_device"`
-	// Storage class of the helper's boot disk. Defaults to the AZ default.
-	StorageClass string `mapstructure:"storage_class"`
+	// Storage class of the helper's boot disk, for example `block-standard`.
+	StorageClass string `mapstructure:"storage_class" required:"true"`
 
 	// Subnet the helper is attached to.
 	SubnetEID string `mapstructure:"subnet_eid" required:"true"`
@@ -97,13 +98,19 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 		errs = append(errs, errors.New("output_path is required"))
 	}
 	for k, v := range map[string]string{"helper_image_url": c.HelperImageURL, "api_url": c.APIURL,
-		"org_id": c.OrgID, "az": c.AZ, "project_id": c.ProjectID, "token": c.Token, "subnet_eid": c.SubnetEID} {
+		"org_id": c.OrgID, "az": c.AZ, "project_id": c.ProjectID, "token": c.Token, "subnet_eid": c.SubnetEID, "storage_class": c.StorageClass} {
 		if v == "" {
 			errs = append(errs, fmt.Errorf("%s is required", k))
 		}
 	}
 	if c.EIPEID != "" && c.RunnerCIDR == "" {
 		errs = append(errs, errors.New("eip_eid requires runner_cidr"))
+	}
+	if _, err := client.GiB(c.HelperDiskSize); err != nil {
+		errs = append(errs, fmt.Errorf("helper_disk_size: %w", err))
+	}
+	if _, err := client.GiBInt(c.HelperMemory); err != nil {
+		errs = append(errs, fmt.Errorf("helper_memory: %w", err))
 	}
 	if p.transfer == nil {
 		p.transfer = sshFetch
@@ -178,17 +185,25 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 	if e != nil {
 		return e
 	}
+	helperSize, e := client.GiB(c.HelperDiskSize)
+	if e != nil {
+		return e
+	}
+	helperMem, e := client.GiBInt(c.HelperMemory)
+	if e != nil {
+		return e
+	}
 	label := fmt.Sprintf("packer-helper-%d", time.Now().Unix())
 	spec := client.CreateVMInfo{
-		CloudInit: &client.CloudInit{Custom: true, Config: "#cloud-config\npackages: [qemu-utils]\nssh_authorized_keys:\n  - " +
-			string(ssh.MarshalAuthorizedKey(sshPub))},
-		Compute: client.Compute{CPU: c.HelperCPU, Memory: c.HelperMemory},
+		CloudInit: &client.CloudInit{Custom: true, Bus: "virtio",
+			Config: client.UserCloudInit(c.HelperUser, string(ssh.MarshalAuthorizedKey(sshPub)), "qemu-utils")},
+		Compute: client.Compute{CPU: c.HelperCPU, Memory: helperMem},
 		Disks: []client.Disk{
-			{Order: 0, Disk: &client.CreateDiskInfo{General: client.DiskGeneral{
-				Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: c.HelperDiskSize, StorageClass: c.StorageClass}}},
-			{Order: 1, EID: diskID},
+			{Order: 0, Bus: "virtio", Disk: &client.CreateDiskInfo{General: client.DiskGeneral{
+				Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: helperSize, StorageClass: c.StorageClass}}},
+			{Order: 1, Bus: "virtio", EID: diskID},
 		},
-		General: client.General{RunStrategy: "Always", Labels: []string{label}},
+		General: client.General{RunStrategy: "Always", Labels: []string{client.CreatedByLabel(label)}},
 	}
 	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
 	ui.Say("Creating export helper VM...")

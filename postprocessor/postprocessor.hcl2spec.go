@@ -22,7 +22,7 @@ type FlatConfig struct {
 	HelperDiskSize *string `mapstructure:"helper_disk_size" cty:"helper_disk_size" hcl:"helper_disk_size"`
 	HelperUser     *string `mapstructure:"helper_ssh_username" cty:"helper_ssh_username" hcl:"helper_ssh_username"`
 	DiskDevice     *string `mapstructure:"disk_device" cty:"disk_device" hcl:"disk_device"`
-	StorageClass   *string `mapstructure:"storage_class" cty:"storage_class" hcl:"storage_class"`
+	StorageClass   *string `mapstructure:"storage_class" required:"true" cty:"storage_class" hcl:"storage_class"`
 	SubnetEID      *string `mapstructure:"subnet_eid" required:"true" cty:"subnet_eid" hcl:"subnet_eid"`
 	EIPEID         *string `mapstructure:"eip_eid" cty:"eip_eid" hcl:"eip_eid"`
 	RunnerCIDR     *string `mapstructure:"runner_cidr" cty:"runner_cidr" hcl:"runner_cidr"`
