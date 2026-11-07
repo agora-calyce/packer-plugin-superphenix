@@ -81,7 +81,7 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 				return cli, nil
 			}
 			if time.Now().After(deadline) || ctx.Err() != nil {
-				return nil, fmt.Errorf("ssh to helper: %w", err)
+				return nil, fmt.Errorf("ssh to helper %s: %w (Packer must run inside the subnet or behind a VPN to reach the helper's private IP)", host, err)
 			}
 			time.Sleep(5 * time.Second)
 		}

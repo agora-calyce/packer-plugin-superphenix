@@ -225,10 +225,7 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 		return err
 	}
 
-	// 4. Le runner est dans le réseau : IP privée du helper (comme pour le builder).
-	host := ip
-
-	// 5. Conversion + récupération.
-	ui.Say(fmt.Sprintf("Converting and downloading qcow2 from %s...", host))
-	return p.transfer(ctx, ui, host, c.HelperUser, signer, c.DiskDevice, c.OutputPath)
+	// 4. Conversion + récupération (le runner est dans le réseau : IP privée du helper).
+	ui.Say(fmt.Sprintf("Converting and downloading qcow2 from %s...", ip))
+	return p.transfer(ctx, ui, ip, c.HelperUser, signer, c.DiskDevice, c.OutputPath)
 }
