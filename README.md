@@ -57,7 +57,7 @@ Reference documentation:
 
 ## Known limitations
 
-- Cloud images only (`http` disk source); no ISO installation.
+- Cloud images only (`http` disk source); no ISO installation. Customize with `user_data` (`#cloud-config`) and provisioners.
 - SSH only; no WinRM, so no Windows images yet.
 - The helper's SSH host key is not verified (the helper is ephemeral).
 - The runner must be inside the Superphenix network (see Requirements).

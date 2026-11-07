@@ -28,12 +28,15 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 	if err != nil {
 		return fail(state, err)
 	}
+	cloudInit, err := client.MergeUserData(client.UserCloudInit(c.Comm.SSHUsername, string(c.Comm.SSHPublicKey)), c.UserData)
+	if err != nil {
+		return fail(state, err)
+	}
 	spec := client.CreateVMInfo{
-		CloudInit: &client.CloudInit{Custom: true, Bus: "virtio",
-			Config: client.UserCloudInit(c.Comm.SSHUsername, string(c.Comm.SSHPublicKey))},
-		Compute: client.Compute{CPU: c.CPU, Memory: mem},
-		Disks:   []client.Disk{{Order: 0, Bus: "virtio", EID: ""}}, // EID renseigné après création du disque
-		General: client.General{VMType: c.VMType, RunStrategy: "Always", Labels: []string{client.CreatedByLabel("packer")}},
+		CloudInit: &client.CloudInit{Custom: true, Bus: "virtio", Config: cloudInit},
+		Compute:   client.Compute{CPU: c.CPU, Memory: mem},
+		Disks:     []client.Disk{{Order: 0, Bus: "virtio", EID: ""}}, // EID renseigné après création du disque
+		General:   client.General{VMType: c.VMType, RunStrategy: "Always", Labels: []string{client.CreatedByLabel("packer")}},
 	}
 	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
 

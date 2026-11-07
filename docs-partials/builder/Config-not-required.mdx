@@ -6,6 +6,11 @@
 
 - `disk_size` (string) - Size of the boot disk, a whole number of GiB such as `20Gi`. Defaults to `20Gi`.
 
+- `user_data` (string) - Extra cloud-init user-data (`#cloud-config` YAML), for example
+  `file("user-data.yml")`. It is merged with the plugin's own config: `users`
+  and `packages` are appended (the SSH user is always created), other keys
+  override. Other formats (shell script, MIME) are not supported.
+
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
 <!-- End of code generated from the comments of the Config struct in builder/builder.go; -->

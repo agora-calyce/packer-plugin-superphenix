@@ -19,7 +19,7 @@ The post-processor needs the builder artifact; it cannot be used with another bu
    build VM and of the helper. No EIP support. Outside the network the build hangs ~10 min then fails with
    `ssh to helper ...`.
 2. **Cloud images only** (`source_url` = http(s) URL of a `.img`/`.qcow2`). No ISO, no `boot_command`,
-   no `http_directory`, no preseed/kickstart.
+   no `http_directory`, no preseed/kickstart. ISO support is not implemented yet.
 3. **SSH only.** No WinRM, so no Windows.
 4. **Sizes are whole GiB strings**: `memory = "4Gi"`, `disk_size = "20Gi"`. No `4096`, `4G`, `512Mi`, `1.5Gi`.
 5. The token is a secret: pass it with `variable "token" { sensitive = true }` fed by `PKR_VAR_token`
@@ -29,7 +29,7 @@ The post-processor needs the builder artifact; it cannot be used with another bu
 ## Required arguments
 
 Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `source_url`, `subnet_eid`, `storage_class`.
-Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, plus the usual `communicator = "ssh"`
+Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, plus the usual `communicator = "ssh"`
 and `ssh_*` settings (`ssh_username` defaults to `spx`; the plugin creates that user itself with passwordless sudo).
 
 Post-processor: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, `output_path`,
@@ -103,7 +103,7 @@ build {
 | `disk_size` | `disk_size = "<n>Gi"` |
 | `output_directory`, `vm_name`, `format = "qcow2"` | `post-processor "superphenix-export"` with `output_path = "<dir>/<name>.qcow2"` |
 | `accelerator`, `headless`, `display`, `qemuargs`, `net_device`, `disk_interface` | drop (no equivalent) |
-| `http_directory`, `boot_command`, `boot_wait` | drop; configure with cloud-init-capable image + `provisioner` |
+| `http_directory`, `boot_command`, `boot_wait` | drop; use a cloud image + `user_data` (cloud-config) and/or `provisioner` |
 | `shutdown_command` | drop (the plugin stops the VM through the API) |
 | `ssh_*` | keep `communicator = "ssh"` and `ssh_username`; password auth is not set up by the plugin, use the generated key |
 | none | add `subnet_eid`, `storage_class`, `api_url`, `org_id`, `az`, `project_id`, `token` |
@@ -111,6 +111,13 @@ build {
 Provisioners (`shell`, `file`, `ansible`...) and other post-processors work unchanged. Update CI: replace
 the QEMU/KVM runner requirement by a runner **inside the subnet**, export `PKR_VAR_*` variables, keep
 `output_path` in the job `artifacts`.
+
+## Customizing with cloud-init (`user_data`)
+
+`user_data = file("user-data.yml")` injects extra cloud-init into the build VM. Only `#cloud-config` YAML is
+accepted (no shell script or MIME). It is merged with the plugin's config: `users` and `packages` are appended
+(the SSH user is always created), every other key of yours wins. It applies to the build VM only, not to the export
+helper. Prefer `provisioner` blocks for anything that must run after SSH is up.
 
 ## Validate and run
 

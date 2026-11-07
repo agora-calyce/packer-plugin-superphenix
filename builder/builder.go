@@ -51,6 +51,11 @@ type Config struct {
 	// Effective ID of the subnet the VM is attached to. The machine running
 	// Packer must be able to reach the VM's IP address.
 	SubnetEID string `mapstructure:"subnet_eid" required:"true"`
+	// Extra cloud-init user-data (`#cloud-config` YAML), for example
+	// `file("user-data.yml")`. It is merged with the plugin's own config: `users`
+	// and `packages` are appended (the SSH user is always created), other keys
+	// override. Other formats (shell script, MIME) are not supported.
+	UserData string `mapstructure:"user_data"`
 	// VM type (size preset), if your AZ defines some.
 	VMType string `mapstructure:"vm_type"`
 }
@@ -89,6 +94,9 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	}
 	if _, err := client.GiBInt(c.Memory); err != nil {
 		errs = append(errs, fmt.Errorf("memory: %w", err))
+	}
+	if _, err := client.MergeUserData("#cloud-config\n", c.UserData); err != nil {
+		errs = append(errs, err)
 	}
 	for _, e := range c.Comm.Prepare(&interpolate.Context{}) {
 		errs = append(errs, e)

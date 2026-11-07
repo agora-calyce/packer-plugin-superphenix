@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Types alignés sur vm.CreateVMInfo / view.Instance (docs.go du controller).
@@ -238,4 +240,40 @@ func (c *Client) WaitStopped(ctx context.Context, id string, every time.Duration
 		case <-t.C:
 		}
 	}
+}
+
+// MergeUserData fusionne la cloud-config de l'utilisateur dans celle du plugin : `users` et `packages`
+// sont concaténés (l'utilisateur SSH du plugin est toujours créé), les autres clés de l'utilisateur
+// l'emportent. Seul le format `#cloud-config` (YAML) est accepté.
+func MergeUserData(base, userData string) (string, error) {
+	if strings.TrimSpace(userData) == "" {
+		return base, nil
+	}
+	if !strings.HasPrefix(strings.TrimSpace(userData), "#cloud-config") {
+		return "", fmt.Errorf("user_data must start with #cloud-config (other formats are not supported)")
+	}
+	var b, u map[string]any
+	if err := yaml.Unmarshal([]byte(base), &b); err != nil {
+		return "", err
+	}
+	if err := yaml.Unmarshal([]byte(userData), &u); err != nil {
+		return "", fmt.Errorf("user_data: %w", err)
+	}
+	if u == nil {
+		u = map[string]any{}
+	}
+	for _, k := range []string{"users", "packages"} {
+		bl, _ := b[k].([]any)
+		if v, ok := u[k]; ok {
+			ul, isList := v.([]any)
+			if !isList {
+				return "", fmt.Errorf("user_data: %q must be a list", k)
+			}
+			u[k] = append(ul, bl...)
+		} else if bl != nil {
+			u[k] = bl
+		}
+	}
+	out, err := yaml.Marshal(u)
+	return "#cloud-config\n" + string(out), err
 }

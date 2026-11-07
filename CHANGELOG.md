@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Builder: `user_data` option, extra `#cloud-config` merged with the plugin's cloud-init.
+
 ### Breaking changes
 
 - `superphenix-export`: removed `eip_eid` and `runner_cidr`. EIP exposure is no

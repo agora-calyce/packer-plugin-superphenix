@@ -101,3 +101,25 @@ func TestWaitDiskReady(t *testing.T) {
 		t.Fatalf("2 appels attendus sans erreur, obtenu %d, err=%v", n, err)
 	}
 }
+
+func TestMergeUserData(t *testing.T) {
+	base := UserCloudInit("spx", "ssh-ed25519 AAAA")
+	got, err := MergeUserData(base, "#cloud-config\nhostname: web\nusers:\n  - name: bob\npackages: [nginx]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range []string{"#cloud-config", "hostname: web", "name: bob", "name: spx", "ssh-ed25519 AAAA", "nginx"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
+	}
+	if same, _ := MergeUserData(base, ""); same != base {
+		t.Error("empty user_data must keep base")
+	}
+	if _, err := MergeUserData(base, "#!/bin/sh\necho hi"); err == nil {
+		t.Error("non cloud-config must be rejected")
+	}
+	if _, err := MergeUserData(base, "#cloud-config\nusers: bob\n"); err == nil {
+		t.Error("non-list users must be rejected")
+	}
+}

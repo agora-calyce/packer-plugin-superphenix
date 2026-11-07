@@ -80,6 +80,7 @@ type FlatConfig struct {
 	DiskSize                  *string           `mapstructure:"disk_size" cty:"disk_size" hcl:"disk_size"`
 	StorageClass              *string           `mapstructure:"storage_class" required:"true" cty:"storage_class" hcl:"storage_class"`
 	SubnetEID                 *string           `mapstructure:"subnet_eid" required:"true" cty:"subnet_eid" hcl:"subnet_eid"`
+	UserData                  *string           `mapstructure:"user_data" cty:"user_data" hcl:"user_data"`
 	VMType                    *string           `mapstructure:"vm_type" cty:"vm_type" hcl:"vm_type"`
 }
 
@@ -165,6 +166,7 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"disk_size":                    &hcldec.AttrSpec{Name: "disk_size", Type: cty.String, Required: false},
 		"storage_class":                &hcldec.AttrSpec{Name: "storage_class", Type: cty.String, Required: false},
 		"subnet_eid":                   &hcldec.AttrSpec{Name: "subnet_eid", Type: cty.String, Required: false},
+		"user_data":                    &hcldec.AttrSpec{Name: "user_data", Type: cty.String, Required: false},
 		"vm_type":                      &hcldec.AttrSpec{Name: "vm_type", Type: cty.String, Required: false},
 	}
 	return s
