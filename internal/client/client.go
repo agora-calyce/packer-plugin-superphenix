@@ -78,6 +78,9 @@ func IsNotFound(err error) bool {
 func (c *Client) CreateInstance(ctx context.Context, spec, out any) error {
 	return c.Call(ctx, "POST", "instance", spec, out)
 }
+func (c *Client) StartInstance(ctx context.Context, id string) error {
+	return c.Call(ctx, "GET", "instance/"+id+"/start", nil, nil)
+}
 func (c *Client) StopInstance(ctx context.Context, id string) error {
 	return c.Call(ctx, "GET", "instance/"+id+"/stop", nil, nil)
 }

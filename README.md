@@ -12,7 +12,7 @@ to run in CI (for example GitLab CI).
 
 | Component | Name | Description |
 |---|---|---|
-| Builder | `superphenix` | Creates a VM from a cloud image, provisions it over SSH, stops it. |
+| Builder | `superphenix` | Creates a VM from a cloud image or installs one from an ISO, provisions it over SSH, stops it. |
 | Post-processor | `superphenix-export` | Converts the VM disk to `qcow2` through a short-lived helper VM and downloads it. |
 
 Superphenix has no disk export endpoint, so the post-processor detaches the disk, attaches it to a helper VM
@@ -36,7 +36,8 @@ Then run `packer init`.
 
 ## Usage
 
-A complete template is in [`example/ubuntu.pkr.hcl`](example/ubuntu.pkr.hcl), and a GitLab CI job in
+Complete templates: [`example/ubuntu.pkr.hcl`](example/ubuntu.pkr.hcl) (cloud image) and
+[`example/ubuntu-iso.pkr.hcl`](example/ubuntu-iso.pkr.hcl) (Ubuntu ISO, autoinstall). A GitLab CI job is in
 [`example/.gitlab-ci.yml`](example/.gitlab-ci.yml) (move it to the repository root to use it).
 
 Pass the API token through a sensitive variable (`PKR_VAR_token`, a masked CI variable), never in a template.
@@ -57,7 +58,11 @@ Reference documentation:
 
 ## Known limitations
 
-- Cloud images only (`http` disk source); no ISO installation. Customize with `user_data` (`#cloud-config`) and provisioners.
+- Sources: cloud image (`source_url`) or ISO (`iso_url`, UEFI, driven by `boot_command` over VNC). ISO installs are
+  only tested with Ubuntu Server 26.04 and `user_data` autoinstall. Customize with `user_data` (`#cloud-config`) and
+  provisioners.
+- No `cd_files`/`floppy` yet (needed for Windows `autounattend.xml` and drivers).
+- The export post-processor has not been re-tested on a VM built from an ISO.
 - SSH only; no WinRM, so no Windows images yet.
 - The helper's SSH host key is not verified (the helper is ephemeral).
 - The runner must be inside the Superphenix network (see Requirements).

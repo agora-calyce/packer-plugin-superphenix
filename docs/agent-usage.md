@@ -18,9 +18,10 @@ The post-processor needs the builder artifact; it cannot be used with another bu
 1. **Packer must run inside the Superphenix subnet (or behind a VPN).** It SSHes to the *private* IP of the
    build VM and of the helper. No EIP support. Outside the network the build hangs ~10 min then fails with
    `ssh to helper ...`.
-2. **Cloud images only** (`source_url` = http(s) URL of a `.img`/`.qcow2`). No ISO, no `boot_command`,
-   no `http_directory`, no preseed/kickstart. ISO support is not implemented yet.
-3. **SSH only.** No WinRM, so no Windows.
+2. **Exactly one source**: `source_url` (http(s) URL of a cloud image `.img`/`.qcow2`) **or** `iso_url` (http(s)
+   URL of an installer ISO; Superphenix downloads it, so no local path and no `iso_checksum`). ISO installs
+   are only tested with Ubuntu Server 26.04 (see "ISO installs" below).
+3. **SSH only.** No WinRM, so no Windows yet. No `cd_files`/`cd_content`/`floppy_*` yet.
 4. **Sizes are whole GiB strings**: `memory = "4Gi"`, `disk_size = "20Gi"`. No `4096`, `4G`, `512Mi`, `1.5Gi`.
 5. The token is a secret: pass it with `variable "token" { sensitive = true }` fed by `PKR_VAR_token`
    (masked CI variable). Never write it in a template, a log, a commit or a message.
@@ -28,8 +29,8 @@ The post-processor needs the builder artifact; it cannot be used with another bu
 
 ## Required arguments
 
-Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `source_url`, `subnet_eid`, `storage_class`.
-Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, plus the usual `communicator = "ssh"`
+Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, and one of `source_url` / `iso_url`.
+Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, ISO only: `iso_disk_size` ("8Gi"), `efi` (true), `secure_boot`, `tpm`, `boot_command`, `boot_wait`, `http_content`/`http_directory`, plus the usual `communicator = "ssh"`
 and `ssh_*` settings (`ssh_username` defaults to `spx`; the plugin creates that user itself with passwordless sudo).
 
 Post-processor: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, `output_path`,
@@ -97,13 +98,17 @@ build {
 
 | `qemu` | `superphenix` |
 |---|---|
-| `iso_url` / `disk_image = true` + `iso_url` | `source_url` (must be a cloud image, not an installer ISO) |
-| `iso_checksum` | none (not supported) |
+| `iso_url` (installer ISO) | `iso_url` (http(s) only) |
+| `iso_url` + `disk_image = true` (cloud image) | `source_url` |
+| `iso_checksum`, `iso_target_extension` | none (drop) |
 | `cpus`, `memory` (MB int) | `cpu`, `memory = "<n>Gi"` |
 | `disk_size` | `disk_size = "<n>Gi"` |
 | `output_directory`, `vm_name`, `format = "qcow2"` | `post-processor "superphenix-export"` with `output_path = "<dir>/<name>.qcow2"` |
 | `accelerator`, `headless`, `display`, `qemuargs`, `net_device`, `disk_interface` | drop (no equivalent) |
-| `http_directory`, `boot_command`, `boot_wait` | drop; use a cloud image + `user_data` (cloud-config) and/or `provisioner` |
+| `http_content`, `http_directory`, `boot_wait` | keep (VM must reach the Packer machine; prefer `user_data`) |
+| `boot_command` | keep, typed over VNC. GRUB UEFI differs from BIOS: see "ISO installs" |
+| `efi_boot`, `efi_firmware_*`, `qemuargs` | drop; `efi` (default true for ISO), `secure_boot`, `tpm` |
+| `cd_files`, `floppy_*` (Windows) | not supported yet |
 | `shutdown_command` | drop (the plugin stops the VM through the API) |
 | `ssh_*` | keep `communicator = "ssh"` and `ssh_username`; password auth is not set up by the plugin, use the generated key |
 | none | add `subnet_eid`, `storage_class`, `api_url`, `org_id`, `az`, `project_id`, `token` |
@@ -118,6 +123,21 @@ the QEMU/KVM runner requirement by a runner **inside the subnet**, export `PKR_V
 accepted (no shell script or MIME). It is merged with the plugin's config: `users` and `packages` are appended
 (the SSH user is always created), every other key of yours wins. It applies to the build VM only, not to the export
 helper. Prefer `provisioner` blocks for anything that must run after SSH is up.
+
+## ISO installs
+
+`example/ubuntu-iso.pkr.hcl` is a tested template (Ubuntu Server 26.04). The mechanism:
+
+- Disks: empty `disk_size` disk first, ISO as CD-ROM second, **UEFI** firmware (BIOS never boots the CD-ROM).
+  The installed disk boots by itself after the installer reboots; the ISO disk is deleted at the end.
+- Answer file: put it in `user_data` (`#cloud-config` with an `autoinstall:` section). It is set on the instance's
+  cloud-init, read by the installer without any network, and passed as is. Prefer it over `http_content`, which
+  needs the VM to reach the Packer machine (a security group may block it).
+- `boot_command` keeps `autoinstall` on the kernel command line, inserted **before** the `---` of the `linux`
+  line: `e<wait><down><down><down><end><left><left><left><left>` then `autoinstall `, then `<f10>`. It depends on
+  the ISO: when changing release, check the GRUB editor on a VNC screenshot instead of guessing.
+- The autoinstall must create the SSH user Packer uses and enable SSH (with `allow-pw` for password auth).
+- The post-processor has not been re-tested on a VM built from an ISO. The qcow2 holds an EFI system: boot it with EFI.
 
 ## Validate and run
 
@@ -135,6 +155,9 @@ Typical durations: image import a few minutes, then provisioning, then conversio
 
 | Symptom | Cause / action |
 |---|---|
+| `exactly one of source_url and iso_url is required` | Set only one source. |
+| ISO build stuck at "No bootable device" | Firmware is BIOS: leave `efi` unset (default true) for `iso_url`. |
+| Installer asks questions / ignores the answer file | `autoinstall` missing from the kernel line, or typed after `---`; check the GRUB screen. |
 | `Unsupported argument "eip_eid"` / `"runner_cidr"` | Removed options. Delete them; run Packer inside the subnet. |
 | `memory: ...` / `disk_size: ...` error | Use whole GiB strings like `"4Gi"`. |
 | `<arg> is required` | Fill the listed argument (both blocks need their own connection arguments). |

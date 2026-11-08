@@ -14,6 +14,7 @@ import (
 
 // Types alignés sur vm.CreateVMInfo / view.Instance (docs.go du controller).
 type CreateVMInfo struct {
+	Advanced  *Advanced  `json:"advanced,omitempty"`
 	CloudInit *CloudInit `json:"cloudInit,omitempty"`
 	Compute   Compute    `json:"compute"`
 	Disks     []Disk     `json:"disks"`
@@ -24,6 +25,26 @@ type CreateVMInfo struct {
 	// ResourceEffectiveID : valeur choisie côté client ? Non confirmé, laissé vide par défaut.
 	ResourceEffectiveID string `json:"resourceEffectiveID,omitempty"`
 	ResourceLocalID     string `json:"resourceLocalID,omitempty"`
+}
+type Advanced struct {
+	Devices  *Devices  `json:"devices,omitempty"`
+	Firmware *Firmware `json:"firmware,omitempty"`
+}
+type Devices struct {
+	TPM TPM `json:"tpm"`
+}
+type TPM struct {
+	Enabled bool `json:"enabled"`
+}
+type Firmware struct {
+	Bootloader Bootloader `json:"bootloader"`
+}
+type Bootloader struct {
+	EFI EFI `json:"efi"`
+}
+type EFI struct {
+	Enabled    bool `json:"enabled"`
+	SecureBoot bool `json:"secureBoot"`
 }
 type CloudInit struct {
 	Bus    string `json:"bus,omitempty"`
@@ -50,12 +71,13 @@ type CreateDiskInfo struct {
 	General DiskGeneral `json:"general"`
 }
 type DiskGeneral struct {
+	Labels       []string   `json:"labels,omitempty"`
 	Source       DiskSource `json:"source"`
 	Storage      string     `json:"storage"`
 	StorageClass string     `json:"storageClass,omitempty"`
 }
 type DiskSource struct {
-	Type string `json:"type"` // ex. "Http" (valeur exacte à confirmer)
+	Type string `json:"type"` // "http" ou "blank" (minuscules)
 	URL  string `json:"url,omitempty"`
 }
 type Network struct {
@@ -172,16 +194,19 @@ func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, erro
 // mountedRetry : délai entre deux essais tant que le disque est encore monté.
 var mountedRetry = 5 * time.Second
 
-// DeleteDiskIfExists ignore les 404 et réessaie (3 min max) tant que l'API répond "mounted" :
+// DeleteDiskIfExists ignore les 404 et réessaie (10 min max : la suppression de la VM peut prendre plusieurs minutes à se propager) tant que l'API répond "mounted" ou 5xx :
 // la suppression d'une VM est asynchrone, son disque reste monté un moment.
 func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
-	deadline := time.Now().Add(3 * time.Minute)
+	deadline := time.Now().Add(10 * time.Minute)
 	for {
 		err := c.DeleteDisk(ctx, id)
 		if err == nil || IsNotFound(err) {
 			return nil
 		}
-		if !strings.Contains(err.Error(), "mounted") || time.Now().After(deadline) {
+		// "mounted" ou 5xx transitoire (vu juste après la suppression de la VM) : on réessaie.
+		var se *StatusError
+		retry := strings.Contains(err.Error(), "mounted") || (errors.As(err, &se) && se.Code >= 500)
+		if !retry || time.Now().After(deadline) {
 			return err
 		}
 		select {

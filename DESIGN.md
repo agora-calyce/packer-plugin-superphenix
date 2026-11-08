@@ -2,7 +2,7 @@
 
 ## Périmètre
 - Plugin Go (`packer-plugin-sdk`) : **builder** + **post-processor**.
-- Builder : crée la VM depuis une cloud image (source `http`), provisionne via le communicator SSH. Pas d'ISO, pas de WinRM.
+- Builder : crée la VM depuis une cloud image (`source_url`) ou installe depuis une ISO (`iso_url`), provisionne via SSH. Pas de WinRM, pas de `cd_files`/`floppy` pour l'instant (Windows à venir).
 - Post-processor : exporte le disque en qcow2 vers la machine qui lance Packer (variante 3b).
 - Auth : API token (en-tête `Authorization: api-token <token>`, créé dans la console) via variable CI masquée. Client HTTP écrit à la main (pas de SDK Go public).
 - Réseau : le runner joint les **IP privées** des VM (builder et helper d'export). Il doit donc être dans le subnet Superphenix, ou derrière un VPN. L'exposition par EIP n'est pas supportée.
@@ -28,6 +28,16 @@ Points à connaître :
 - La suppression d'une VM est asynchrone : son disque reste « mounted » un moment.
 - Une VM qui démarre avant la fin de l'import de son disque de boot peut démarrer sur un autre disque : on attend `Succeeded`.
 
+## Installation depuis une ISO
+Testé avec Ubuntu Server 26.04 (2026-11-08).
+- Disques : un disque vide (`source.type = "blank"`, minuscules) en `order 0` (virtio) et l'ISO (`http`, `cdrom: true`, bus `sata`) en `order 1`. Attendre `Succeeded` sur les deux avant de créer la VM.
+- **EFI obligatoire** (`advanced.firmware.bootloader.efi.enabled`) : en BIOS (SeaBIOS) seul le disque dur est essayé, le CD-ROM n'est jamais amorcé. Avec EFI, le disque vide n'est pas amorçable donc l'ISO démarre, puis le disque installé démarre seul au reboot de l'installeur : pas besoin d'éjecter le CD-ROM. Pas de `bootOrder` dans l'API.
+- `boot_command` : `GET .../instance/{id}/vnc` est un WebSocket (en-tête `Authorization`) qui parle RFB 003.008 (sécurité « None »). Le plugin envoie seulement des `KeyEvent` (`internal/client/vnc.go`) via le pilote VNC du SDK. Une capture d'écran se lit avec les rectangles Raw (outil jetable, non conservé).
+- Fichier de réponse : `cloudInit.config` de l'instance (disque `cidata` lu par l'installeur). Évite le serveur HTTP de Packer, que la VM ne joint pas si un groupe de sécurité bloque le runner. `http_content` reste possible.
+- Ubuntu 26.04, GRUB EFI : la ligne `linux /casper/vmlinuz  ---` est la 4e ligne de l'éditeur ; `autoinstall` doit être inséré **avant** `---` (`<end><left><left><left><left>` : il y a un caractère après les tirets). À vérifier par capture à chaque nouvelle release.
+- Le disque ISO est détaché (`unmount`) puis supprimé à la fin du build. Il reste attaché pendant le provisioning.
+- Non testé : l'export d'une VM issue d'une ISO, Secure Boot, TPM, Windows, `cd_files`.
+
 ## Export qcow2 — variante 3b
 1. `stop` de la VM Packer (le builder), puis attente de l'état `Stopped`.
 2. `unmount` du disque Packer, puis suppression de la VM Packer (le disque survit).
@@ -39,6 +49,7 @@ Points à connaître :
 ## Limites connues
 - Testé avec une version de l'API et une AZ (`fr01-als01`) ; la version déployée attend `memory` en entier de Gio, alors que le code récent de `main` attend une quantité (`"4Gi"`) : à suivre à la mise à jour de l'API.
 - Clé hôte SSH du helper non vérifiée (VM éphémère, clé inconnue d'avance).
+- La suppression d'un disque peut renvoyer 500 jusqu'à plusieurs minutes après la suppression de sa VM : le plugin réessaie 10 min.
 - Si `Ctrl-C` ou un crash tue Packer pendant le build, les ressources déjà créées peuvent rester : les labels `user.superphenix.net/created-by:packer*` permettent de les repérer.
 
 ## Pistes

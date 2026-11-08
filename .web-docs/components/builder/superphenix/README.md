@@ -4,13 +4,33 @@
 Type: `superphenix`
 Artifact BuilderId: `agora-calyce.superphenix`
 
-The `superphenix` builder creates a boot disk from a cloud image, creates a VM that boots from it, waits for
-the VM to get an IP address, connects over SSH, runs the provisioners, then stops the VM. The VM is kept so
+The `superphenix` builder creates a boot disk from a cloud image (`source_url`) or installs one from an ISO
+(`iso_url`), creates a VM that boots from it, waits for the VM to get an IP address, connects over SSH, runs the
+provisioners, then stops the VM. The VM is kept so
 that the [superphenix-export](/packer/integrations/agora-calyce/superphenix/latest/components/post-processor/export)
 post-processor can export its disk. If the build fails or is cancelled, the VM and its disk are deleted.
 
 The machine running Packer must be able to reach the VM's **private** IP address over SSH, since the builder
 does not expose the VM publicly. In practice, run Packer on a VM inside the subnet (or behind a VPN).
+
+## Sources
+
+Exactly one of `source_url` and `iso_url` is required.
+
+- **Cloud image** (`source_url`): the image is imported as the boot disk. `user_data` (`#cloud-config`) is merged
+  with the plugin's own cloud-init, which always creates the SSH user.
+- **ISO** (`iso_url`): Superphenix imports the ISO from the URL (local files and checksums are not supported)
+  and the VM boots it as a CD-ROM next to an empty `disk_size` disk. The installer is driven with `boot_command`,
+  typed over the VM's VNC console after `boot_wait`. The VM uses **UEFI** (`efi`, default `true`): with the
+  BIOS firmware the CD-ROM is never booted. Once the installed system reboots on the disk, the build continues
+  over SSH. The ISO disk is detached and deleted at the end.
+
+For an unattended install, pass the answer file through `user_data`: it is set on the instance's cloud-init
+configuration, so the installer reads it from the VM's cloud-init disk and the VM does not need to reach the
+machine running Packer. In ISO mode it is passed as is and is not merged with anything.
+`http_content` and `http_directory` also work (`{{ .HTTPIP }}` and `{{ .HTTPPort }}` in `boot_command`), but
+the VM must be able to reach the Packer machine on that port, which a security group may block (see
+`http_port_min` and `http_port_max`).
 
 ## Configuration Reference
 
@@ -34,9 +54,6 @@ alphabetized.
   `Authorization: api-token <token>`. Pass it through a sensitive
   variable (`PKR_VAR_token`) and never write it in the template.
 
-- `source_url` (string) - URL of the cloud image used to create the boot disk (an `Http` disk
-  source). ISO sources are not supported yet.
-
 - `storage_class` (string) - Storage class of the boot disk, for example `block-standard`. The
   available classes are listed by `GET .../{az}/{project_id}/storage-class`.
 
@@ -50,16 +67,39 @@ alphabetized.
 
 <!-- Code generated from the comments of the Config struct in builder/builder.go; DO NOT EDIT MANUALLY -->
 
+- `source_url` (string) - URL of the cloud image used to create the boot disk (an `http` disk
+  source). Exactly one of `source_url` and `iso_url` is required.
+
+- `iso_url` (string) - URL of an installation ISO (an `http` disk source that Superphenix
+  downloads itself; local paths and checksums are not supported). The
+  VM boots an empty `disk_size` disk with the ISO as a CD-ROM, so the
+  installer must be driven with `boot_command` and `http_content` /
+  `http_directory`. The ISO is detached and deleted once the build is done.
+
+- `efi` (\*bool) - UEFI firmware for ISO installs. Defaults to `true`: BIOS only tries the
+  hard disk, so the ISO would never boot. Windows needs EFI anyway.
+
+- `secure_boot` (bool) - Enable UEFI Secure Boot (ISO installs with EFI). Defaults to `false`.
+
+- `tpm` (bool) - Add a TPM device to the VM (ISO installs). Defaults to `false`.
+
+- `iso_disk_size` (string) - Size of the disk holding the ISO, a whole number of GiB larger than the
+  ISO. Defaults to `8Gi`.
+
 - `cpu` (int) - Number of vCPUs. Defaults to `2`.
 
 - `memory` (string) - Amount of memory, a whole number of GiB such as `4Gi`. Defaults to `4Gi`.
 
 - `disk_size` (string) - Size of the boot disk, a whole number of GiB such as `20Gi`. Defaults to `20Gi`.
 
-- `user_data` (string) - Extra cloud-init user-data (`#cloud-config` YAML), for example
-  `file("user-data.yml")`. It is merged with the plugin's own config: `users`
-  and `packages` are appended (the SSH user is always created), other keys
-  override. Other formats (shell script, MIME) are not supported.
+- `user_data` (string) - Cloud-init user-data (`#cloud-config` YAML), for example
+  `file("user-data.yml")`, set on the instance's CloudInit configuration.
+  With `source_url` it is merged with the plugin's own config: `users` and
+  `packages` are appended (the SSH user is always created), other keys
+  override. With `iso_url` it is passed as is, and is the way to give an
+  installer its answer file without any network access from the VM, for
+  example an Ubuntu `autoinstall:` section (keep `autoinstall` on the
+  kernel command line). Other formats (shell script, MIME) are not supported.
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
@@ -242,7 +282,42 @@ build {
 }
 ```
 
+### Ubuntu Server ISO (autoinstall)
+
+```hcl
+source "superphenix" "ubuntu-iso" {
+  # api_url, org_id, az, project_id, token, subnet_eid, storage_class as above
+  iso_url   = "https://releases.ubuntu.com/26.04/ubuntu-26.04-live-server-amd64.iso"
+  cpu       = 2
+  memory    = "4Gi"
+  disk_size = "20Gi"
+
+  user_data = file("${path.root}/user-data.yml") # starts with #cloud-config, has an `autoinstall:` section
+
+  boot_wait = "2s"
+  boot_command = [
+    "<spacebar><wait><spacebar><wait><spacebar><wait>",
+    "e<wait><down><down><down><end><left><left><left><left>",
+    "autoinstall ",
+    "<wait><f10>",
+  ]
+
+  communicator = "ssh"
+  ssh_username = "adminsys"
+  ssh_password = var.ssh_password
+  ssh_timeout  = "40m"
+}
+```
+
+The key sequence inserts `autoinstall` before the `---` of the `linux` line in GRUB's editor (checked with the
+Ubuntu 26.04 live-server ISO). It depends on the ISO's GRUB menu: check it on a screenshot when you change
+release. The autoinstall must define the user that Packer connects with and enable SSH.
+
 ## Limitations
 
-- Only cloud images (`http` disk source) are supported. ISO installation is not supported yet.
-- Only the SSH communicator is supported. WinRM is not supported yet.
+- ISO installs are tested with Ubuntu Server 26.04 (EFI, `user_data` autoinstall). Other installers, Secure Boot
+  and `tpm` are untested.
+- Only the SSH communicator is supported. WinRM is not supported yet, so no Windows images yet.
+- No `cd_files` / `cd_content` / `floppy_*` yet.
+- The `superphenix-export` post-processor has not been re-tested on a VM built from an ISO. The exported disk
+  holds an EFI system: boot it with an EFI firmware.

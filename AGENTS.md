@@ -13,9 +13,9 @@ post-processor `superphenix-export` (qcow2 export). Built for CI.
 | Path | Role |
 |---|---|
 | `main.go` | Plugin registration. |
-| `builder/` | Builder: `builder.go` (config, `Prepare`, steps list), `steps.go` (create VM, stop). |
+| `builder/` | Builder: `builder.go` (config, `Prepare`, steps list), `steps.go` (create VM/disks, boot command, wait IP, stop, drop ISO). |
 | `postprocessor/` | Export: `postprocessor.go` (helper VM flow, deferred cleanup), `transfer.go` (SSH conversion + resumable download). |
-| `internal/client/` | Hand-written Superphenix HTTP client (no public Go SDK). |
+| `internal/client/` | Hand-written Superphenix HTTP client (no public Go SDK); `vnc.go` is a minimal RFB keyboard client. |
 | `docs/`, `docs-partials/` | Reference docs (`.mdx`) and generated partials. |
 | `example/` | Reference template and GitLab CI job. |
 
@@ -39,6 +39,7 @@ make plugin-check
   and carry a `user.superphenix.net/created-by:packer*` label.
 - Superphenix API quirks are in `DESIGN.md` (sizes as whole GiB, disk attach only at VM creation, async VM
   deletion, wait for disk import `Succeeded`). Check them before touching `internal/client` or the flows.
+- ISO installs need EFI (BIOS never boots the CD-ROM) and `autoinstall` before `---`; read the ISO installs section of `DESIGN.md` before touching the ISO flow. Debug a boot by reading the VNC screen, not by guessing.
 - Network model: the runner reaches **private IPs** (no EIP). Do not reintroduce public exposure silently.
 - Secrets: the API token is never logged, printed, or put in examples. Examples use variables.
 - Comments in code are in French or English, keep the file's existing language. Prefer the smallest change.

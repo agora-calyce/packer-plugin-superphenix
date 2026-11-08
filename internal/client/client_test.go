@@ -1,13 +1,17 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/websocket"
 )
 
 func TestCall(t *testing.T) {
@@ -34,9 +38,9 @@ func TestDeleteDiskIfExists(t *testing.T) {
 	if err := c.DeleteDiskIfExists(context.Background(), "d"); err != nil {
 		t.Fatalf("404 doit être ignoré : %v", err)
 	}
-	code = 500
+	code = 400 // non réessayable (les 5xx le sont, cf. TestDeleteDiskRetriesOn500)
 	if err := c.DeleteDiskIfExists(context.Background(), "d"); err == nil {
-		t.Fatal("erreur attendue sur 500")
+		t.Fatal("erreur attendue sur 400")
 	}
 }
 
@@ -121,5 +125,48 @@ func TestMergeUserData(t *testing.T) {
 	}
 	if _, err := MergeUserData(base, "#cloud-config\nusers: bob\n"); err == nil {
 		t.Error("non-list users must be rejected")
+	}
+}
+
+func TestVNCKeyEvent(t *testing.T) {
+	got := make(chan []byte, 1)
+	srv := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		ws.PayloadType = websocket.BinaryFrame
+		ws.Write([]byte("RFB 003.008\n"))
+		io.ReadFull(ws, make([]byte, 12))
+		ws.Write([]byte{1, 1})
+		io.ReadFull(ws, make([]byte, 1))
+		ws.Write([]byte{0, 0, 0, 0})
+		io.ReadFull(ws, make([]byte, 1))
+		ws.Write(append(make([]byte, 20), 0, 0, 0, 2, 'v', 'm'))
+		m := make([]byte, 8)
+		io.ReadFull(ws, m)
+		got <- m
+	}))
+	defer srv.Close()
+	v, err := New(srv.URL, "o", "az", "p", "tok").DialVNC(context.Background(), "i1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+	if err := v.KeyEvent(0xFF0D, true); err != nil {
+		t.Fatal(err)
+	}
+	if m := <-got; !bytes.Equal(m, []byte{4, 1, 0, 0, 0, 0, 0xFF, 0x0D}) {
+		t.Fatalf("bad key event %v", m)
+	}
+}
+
+func TestDeleteDiskRetriesOn500(t *testing.T) {
+	mountedRetry = time.Millisecond
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if n++; n < 3 {
+			http.Error(w, "boom", 500)
+		}
+	}))
+	defer srv.Close()
+	if err := New(srv.URL, "o", "az", "p", "tok").DeleteDiskIfExists(context.Background(), "d1"); err != nil || n != 3 {
+		t.Fatalf("err=%v calls=%d", err, n)
 	}
 }
