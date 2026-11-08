@@ -119,10 +119,17 @@ the QEMU/KVM runner requirement by a runner **inside the subnet**, export `PKR_V
 
 ## Customizing with cloud-init (`user_data`)
 
-`user_data = file("user-data.yml")` injects extra cloud-init into the build VM. Only `#cloud-config` YAML is
-accepted (no shell script or MIME). It is merged with the plugin's config: `users` and `packages` are appended
-(the SSH user is always created), every other key of yours wins. It applies to the build VM only, not to the export
-helper. Prefer `provisioner` blocks for anything that must run after SSH is up.
+`user_data = file("user-data.yml")` sets cloud-init on the build VM's instance (the "CloudInit configuration" of the
+console). Only `#cloud-config` YAML is accepted (no shell script or MIME), checked at `packer validate`. It never
+applies to the export helper. The behaviour depends on the source:
+
+| Source | What happens to `user_data` |
+|---|---|
+| `source_url` (cloud image) | **Merged** with the plugin's cloud-init: `users` and `packages` lists are appended (the SSH user, with passwordless sudo and the temporary key, is always created); every other key of yours wins. |
+| `iso_url` (installer) | **Passed as is**, no merge and no SSH user added. The installer reads it from the VM's cloud-init disk (for Ubuntu, an `autoinstall:` section). Your config must create the user Packer connects with and enable SSH. |
+
+Prefer `provisioner` blocks for anything that must run after SSH is up. `user_data` is for first-boot cloud-init
+(cloud image) or the installer's answer file (ISO).
 
 ## ISO installs
 
