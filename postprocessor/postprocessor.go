@@ -8,6 +8,8 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/agora-calyce/packer-plugin-superphenix/builder"
@@ -40,9 +42,9 @@ type Config struct {
 	HelperImageURL string `mapstructure:"helper_image_url" required:"true"`
 	// vCPUs of the helper VM. Defaults to `2`.
 	HelperCPU int `mapstructure:"helper_cpu"`
-	// Memory of the helper VM, a whole number of GiB such as `2Gi`. Defaults to `2Gi`.
+	// Memory of the helper VM. Defaults to `2Gi`. Whole GiB only, between 1 and 5000: write `2Gi` or `2` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 	HelperMemory string `mapstructure:"helper_memory"`
-	// Size of the helper's boot disk, a whole number of GiB such as `30Gi`. It
+	// Size of the helper's boot disk (whole GiB, `30Gi` or `30`). It
 	// also holds the converted qcow2, so it must be larger than the image
 	// produced. Defaults to `30Gi`.
 	HelperDiskSize string `mapstructure:"helper_disk_size"`
@@ -127,12 +129,24 @@ func (p *PostProcessor) PostProcess(ctx context.Context, ui packersdk.Ui, a pack
 		return nil, false, false, errors.New("artifact has no instance_id/disk_id")
 	}
 	c := &p.config
+	// Before any resource is created: failing here costs less than after the export (already long for a Windows disk).
+	if err := ensureOutputDir(c.OutputPath); err != nil {
+		return nil, false, false, err
+	}
 	api := client.New(c.APIURL, c.OrgID, c.AZ, c.ProjectID, c.Token)
 	if err := p.export(ctx, ui, api, instanceID, diskID); err != nil {
 		return nil, false, false, err
 	}
 	// keep=false: the source artifact (deleted VM) must not be kept.
 	return &FileArtifact{p.config.OutputPath}, false, false, nil
+}
+
+// ensureOutputDir creates output_path's parent folder (os.Create does not).
+func ensureOutputDir(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("output_path: %w", err)
+	}
+	return nil
 }
 
 // export runs variant 3b. Each created resource is deleted by defer (success or failure).

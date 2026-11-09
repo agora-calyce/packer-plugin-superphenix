@@ -14,6 +14,7 @@ import (
 
 // Types aligned with vm.CreateVMInfo / view.Instance (controller's docs.go).
 type CreateVMInfo struct {
+	Advanced  *Advanced  `json:"advanced,omitempty"`
 	CloudInit *CloudInit `json:"cloudInit,omitempty"`
 	Compute   Compute    `json:"compute"`
 	Disks     []Disk     `json:"disks"`
@@ -25,6 +26,26 @@ type CreateVMInfo struct {
 	ResourceEffectiveID string `json:"resourceEffectiveID,omitempty"`
 	ResourceLocalID     string `json:"resourceLocalID,omitempty"`
 }
+type Advanced struct {
+	Devices  *Devices  `json:"devices,omitempty"`
+	Firmware *Firmware `json:"firmware,omitempty"`
+}
+type Devices struct {
+	TPM TPM `json:"tpm"`
+}
+type TPM struct {
+	Enabled bool `json:"enabled"`
+}
+type Firmware struct {
+	Bootloader Bootloader `json:"bootloader"`
+}
+type Bootloader struct {
+	EFI EFI `json:"efi"`
+}
+type EFI struct {
+	Enabled    bool `json:"enabled"`
+	SecureBoot bool `json:"secureBoot"`
+}
 type CloudInit struct {
 	Bus    string `json:"bus,omitempty"`
 	Config string `json:"config"`
@@ -32,7 +53,7 @@ type CloudInit struct {
 }
 type Compute struct {
 	CPU    int `json:"cpu"`
-	Memory int `json:"memory"` // GiB
+	Memory int `json:"memory"` // Gio
 }
 type General struct {
 	Labels      []string `json:"labels,omitempty"`
@@ -42,20 +63,21 @@ type General struct {
 type Disk struct {
 	Bus   string          `json:"bus,omitempty"`
 	CDROM bool            `json:"cdrom,omitempty"`
-	Disk  *CreateDiskInfo `json:"disk,omitempty"` // new disk
-	EID   string          `json:"eid,omitempty"`  // existing disk
+	Disk  *CreateDiskInfo `json:"disk,omitempty"` // nouveau disque
+	EID   string          `json:"eid,omitempty"`  // disque existant
 	Order int             `json:"order"`
 }
 type CreateDiskInfo struct {
 	General DiskGeneral `json:"general"`
 }
 type DiskGeneral struct {
+	Labels       []string   `json:"labels,omitempty"`
 	Source       DiskSource `json:"source"`
 	Storage      string     `json:"storage"`
 	StorageClass string     `json:"storageClass,omitempty"`
 }
 type DiskSource struct {
-	Type string `json:"type"` // e.g. "Http" (exact value to be confirmed)
+	Type string `json:"type"` // "http" or "blank" (lowercase)
 	URL  string `json:"url,omitempty"`
 }
 type Network struct {
@@ -65,7 +87,7 @@ type Network struct {
 	SubnetEID string `json:"subnetEId,omitempty"`
 }
 
-// Instance: subset of view.Instance useful to the plugin (KubeVirt VMI status).
+// Instance : sous-ensemble de view.Instance utile au plugin (status KubeVirt VMI).
 type Instance struct {
 	EID string `json:"eid"`
 	VM  struct {
@@ -78,7 +100,7 @@ type Instance struct {
 			Phase      string `json:"phase"`
 			Interfaces []struct {
 				IPAddress   string   `json:"ipAddress"`
-				IPAddresses []string `json:"ipAddresses"` // KubeVirt: list, IPv6 included
+				IPAddresses []string `json:"ipAddresses"` // KubeVirt : liste, IPv6 incluse
 			} `json:"interfaces"`
 		} `json:"status"`
 	} `json:"vmi"`
@@ -151,7 +173,7 @@ func (c *Client) WaitIP(ctx context.Context, id string, every time.Duration) (st
 	}
 }
 
-// --- Disk ---
+// --- Disque ---
 
 type EIDResponse struct {
 	EID string `json:"eid"`
@@ -172,16 +194,19 @@ func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, erro
 // mountedRetry: delay between two attempts while the disk is still mounted.
 var mountedRetry = 5 * time.Second
 
-// DeleteDiskIfExists ignores 404s and retries (3 min max) while the API answers "mounted":
+// DeleteDiskIfExists ignores 404s and retries (10 min max: VM deletion can take several minutes to propagate) while the API answers "mounted" or 5xx:
 // VM deletion is asynchronous, its disk stays mounted for a while.
 func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
-	deadline := time.Now().Add(3 * time.Minute)
+	deadline := time.Now().Add(10 * time.Minute)
 	for {
 		err := c.DeleteDisk(ctx, id)
 		if err == nil || IsNotFound(err) {
 			return nil
 		}
-		if !strings.Contains(err.Error(), "mounted") || time.Now().After(deadline) {
+		// "mounted" or transient 5xx (seen right after VM deletion): retry.
+		var se *StatusError
+		retry := strings.Contains(err.Error(), "mounted") || (errors.As(err, &se) && se.Code >= 500)
+		if !retry || time.Now().After(deadline) {
 			return err
 		}
 		select {

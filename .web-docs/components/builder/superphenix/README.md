@@ -4,13 +4,33 @@
 Type: `superphenix`
 Artifact BuilderId: `agora-calyce.superphenix`
 
-The `superphenix` builder creates a boot disk from a cloud image, creates a VM that boots from it, waits for
-the VM to get an IP address, connects over SSH, runs the provisioners, then stops the VM. The VM is kept so
+The `superphenix` builder creates a boot disk from a cloud image (`source_url`) or installs one from an ISO
+(`iso_url`), creates a VM that boots from it, waits for the VM to get an IP address, connects over SSH (Linux) or WinRM
+(Windows), runs the provisioners, then stops the VM. The VM is kept so
 that the [superphenix-export](/packer/integrations/agora-calyce/superphenix/latest/components/post-processor/export)
 post-processor can export its disk. If the build fails or is cancelled, the VM and its disk are deleted.
 
-The machine running Packer must be able to reach the VM's **private** IP address over SSH, since the builder
+The machine running Packer must be able to reach the VM's **private** IP address (SSH or WinRM), since the builder
 does not expose the VM publicly. In practice, run Packer on a VM inside the subnet (or behind a VPN).
+
+## Sources
+
+Exactly one of `source_url` and `iso_url` is required.
+
+- **Cloud image** (`source_url`): the image is imported as the boot disk. `user_data` (`#cloud-config`) is merged
+  with the plugin's own cloud-init, which always creates the SSH user.
+- **ISO** (`iso_url`): Superphenix imports the ISO from the URL (local files and checksums are not supported)
+  and the VM boots it as a CD-ROM next to an empty `disk_size` disk. The installer is driven with `boot_command`,
+  typed over the VM's VNC console after `boot_wait`. The VM uses **UEFI** (`efi`, default `true`): with the
+  BIOS firmware the CD-ROM is never booted. Once the installed system reboots on the disk, the build continues
+  over SSH. The ISO disk is detached and deleted at the end.
+
+For an unattended install, pass the answer file through `user_data`: it is set on the instance's cloud-init
+configuration, so the installer reads it from the VM's cloud-init disk and the VM does not need to reach the
+machine running Packer. In ISO mode it is passed as is and is not merged with anything.
+`http_content` and `http_directory` also work (`{{ .HTTPIP }}` and `{{ .HTTPPort }}` in `boot_command`), but
+the VM must be able to reach the Packer machine on that port, which a security group may block (see
+`http_port_min` and `http_port_max`).
 
 ## Configuration Reference
 
@@ -34,9 +54,6 @@ alphabetized.
   `Authorization: api-token <token>`. Pass it through a sensitive
   variable (`PKR_VAR_token`) and never write it in the template.
 
-- `source_url` (string) - URL of the cloud image used to create the boot disk (an `Http` disk
-  source). ISO sources are not supported yet.
-
 - `storage_class` (string) - Storage class of the boot disk, for example `block-standard`. The
   available classes are listed by `GET .../{az}/{project_id}/storage-class`.
 
@@ -50,27 +67,218 @@ alphabetized.
 
 <!-- Code generated from the comments of the Config struct in builder/builder.go; DO NOT EDIT MANUALLY -->
 
+- `source_url` (string) - URL of the cloud image used to create the boot disk (an `http` disk
+  source). Exactly one of `source_url` and `iso_url` is required.
+
+- `iso_url` (string) - URL of an installation ISO (an `http` disk source that Superphenix
+  downloads itself; local paths and checksums are not supported). The
+  VM boots an empty `disk_size` disk with the ISO as a CD-ROM, so the
+  installer must be driven with `boot_command` and `http_content` /
+  `http_directory`. The ISO is detached and deleted once the build is done.
+
+- `efi` (\*bool) - UEFI firmware for ISO installs. Defaults to `true`: BIOS only tries the
+  hard disk, so the ISO would never boot. Windows needs EFI anyway.
+
+- `secure_boot` (\*bool) - Enable UEFI Secure Boot (ISO installs with EFI). Defaults to `false`,
+  or to what `vm_type` defines when `vm_type` is set and none of `efi`,
+  `secure_boot` and `tpm` is.
+
+- `tpm` (\*bool) - Add a TPM device to the VM (ISO installs). Defaults to `false`, or to
+  what `vm_type` defines (see `secure_boot`).
+
+- `cd_url` (string) - URL of a ready-made ISO (an `http` disk source that Superphenix downloads
+  itself) attached as a second CD-ROM, typically an answer-file ISO
+  (`autounattend.xml`) for Windows. Needs `iso_url`; exclusive with
+  `cd_files` and `cd_content`. Use it when Superphenix cannot reach the
+  Packer machine to import a generated ISO.
+
+- `cd_disk_size` (string) - Size of the `cd_url` disk, larger than the ISO. Defaults to `1Gi`. Whole GiB only, between 1 and 5000: write `1Gi` or `1` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+
+- `disk_bus` (string) - Bus of the system disk of an ISO install: `virtio` (default) or `sata`.
+  Windows has no virtio storage driver during setup, so use `sata` for it.
+
+- `iso_disk_size` (string) - Size of the disk holding the ISO, larger than the ISO. Defaults to `8Gi`. Whole GiB only, between 1 and 5000: write `8Gi` or `8` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+
 - `cpu` (int) - Number of vCPUs. Defaults to `2`.
 
-- `memory` (string) - Amount of memory, a whole number of GiB such as `4Gi`. Defaults to `4Gi`.
+- `memory` (string) - Amount of memory. Defaults to `4Gi`. Whole GiB only, between 1 and 5000: write `4Gi` or `4` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 
-- `disk_size` (string) - Size of the boot disk, a whole number of GiB such as `20Gi`. Defaults to `20Gi`.
+- `disk_size` (string) - Size of the boot disk. Defaults to `20Gi`. Whole GiB only, between 1 and 5000: write `20Gi` or `20` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 
-- `user_data` (string) - Extra cloud-init user-data (`#cloud-config` YAML), for example
-  `file("user-data.yml")`. It is merged with the plugin's own config: `users`
-  and `packages` are appended (the SSH user is always created), other keys
-  override. Other formats (shell script, MIME) are not supported.
+- `user_data` (string) - Cloud-init user-data (`#cloud-config` YAML), for example
+  `file("user-data.yml")`, set on the instance's CloudInit configuration.
+  With `source_url` it is merged with the plugin's own config: `users` and
+  `packages` are appended (the SSH user is always created), other keys
+  override. With `iso_url` it is passed as is, and is the way to give an
+  installer its answer file without any network access from the VM, for
+  example an Ubuntu `autoinstall:` section (keep `autoinstall` on the
+  kernel command line). Other formats (shell script, MIME) are not supported.
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
 <!-- End of code generated from the comments of the Config struct in builder/builder.go; -->
 
 
+### HTTP server
+
+`http_content`, `http_directory` and the port options serve files to the VM (`{{ .HTTPIP }}` and
+`{{ .HTTPPort }}` in `boot_command`). The VM must be able to reach the Packer machine on that port.
+
+<!-- Code generated from the comments of the HTTPConfig struct in multistep/commonsteps/http_config.go; DO NOT EDIT MANUALLY -->
+
+- `http_directory` (string) - Path to a directory to serve using an HTTP server. The files in this
+  directory will be available over HTTP that will be requestable from the
+  virtual machine. This is useful for hosting kickstart files and so on.
+  By default this is an empty string, which means no HTTP server will be
+  started. The address and port of the HTTP server will be available as
+  variables in `boot_command`. This is covered in more detail below.
+
+- `http_content` (map[string]string) - Key/Values to serve using an HTTP server. `http_content` works like and
+  conflicts with `http_directory`. The keys represent the paths and the
+  values contents, the keys must start with a slash, ex: `/path/to/file`.
+  `http_content` is useful for hosting kickstart files and so on. By
+  default this is empty, which means no HTTP server will be started. The
+  address and port of the HTTP server will be available as variables in
+  `boot_command`. This is covered in more detail below.
+  Example:
+  ```hcl
+    http_content = {
+      "/a/b"     = file("http/b")
+      "/foo/bar" = templatefile("${path.root}/preseed.cfg", { packages = ["nginx"] })
+    }
+  ```
+
+- `http_port_min` (int) - These are the minimum and maximum port to use for the HTTP server
+  started to serve the `http_directory`. Because Packer often runs in
+  parallel, Packer will choose a randomly available port in this range to
+  run the HTTP server. If you want to force the HTTP server to be on one
+  port, make this minimum and maximum port the same. By default the values
+  are `8000` and `9000`, respectively.
+
+- `http_port_max` (int) - HTTP Port Max
+
+- `http_bind_address` (string) - This is the bind address for the HTTP server. Defaults to 0.0.0.0 so that
+  it will work with any network interface.
+
+- `http_network_protocol` (string) - Defines the HTTP Network protocol. Valid options are `tcp`, `tcp4`, `tcp6`,
+  `unix`, and `unixpacket`. This value defaults to `tcp`.
+
+<!-- End of code generated from the comments of the HTTPConfig struct in multistep/commonsteps/http_config.go; -->
+
+
+### Boot command
+
+`boot_command` is typed on the VM's VNC console (ISO installs only), after `boot_wait`. The keyboard layout is
+the installer's: on a French Windows installer, keys are mapped as on an AZERTY keyboard.
+
+<!-- Code generated from the comments of the BootConfig struct in bootcommand/config.go; DO NOT EDIT MANUALLY -->
+
+- `boot_keygroup_interval` (duration string | ex: "1h5m2s") - Time to wait after sending a group of key pressses. The value of this
+  should be a duration. Examples are `5s` and `1m30s` which will cause
+  Packer to wait five seconds and one minute 30 seconds, respectively. If
+  this isn't specified, a sensible default value is picked depending on
+  the builder type.
+
+- `boot_wait` (duration string | ex: "1h5m2s") - The time to wait after booting the initial virtual machine before typing
+  the `boot_command`. The value of this should be a duration. Examples are
+  `5s` and `1m30s` which will cause Packer to wait five seconds and one
+  minute 30 seconds, respectively. If this isn't specified, the default is
+  `10s` or 10 seconds. To set boot_wait to 0s, use a negative number, such
+  as "-1s"
+
+- `boot_command` ([]string) - This is an array of commands to type when the virtual machine is first
+  booted. The goal of these commands should be to type just enough to
+  initialize the operating system installer. Special keys can be typed as
+  well, and are covered in the section below on the boot command. If this
+  is not specified, it is assumed the installer will start itself.
+
+<!-- End of code generated from the comments of the BootConfig struct in bootcommand/config.go; -->
+
+
+### CD (generated ISO)
+
+`cd_files`, `cd_content` and `cd_label` generate an ISO on the Packer machine (`xorriso`, `mkisofs` or similar
+required) that Superphenix then imports from Packer's HTTP server: this only works if Superphenix can reach
+the Packer machine. Otherwise host a ready-made ISO and use `cd_url`.
+
+<!-- Code generated from the comments of the CDConfig struct in multistep/commonsteps/extra_iso_config.go; DO NOT EDIT MANUALLY -->
+
+- `cd_files` ([]string) - A list of files to place onto a CD that is attached when the VM is
+  booted. This can include either files or directories; any directories
+  will be copied onto the CD recursively, preserving directory structure
+  hierarchy. Symlinks will have the link's target copied into the directory
+  tree on the CD where the symlink was. File globbing is allowed.
+  
+  Usage example (JSON):
+  
+  ```json
+  "cd_files": ["./somedirectory/meta-data", "./somedirectory/user-data"],
+  "cd_label": "cidata",
+  ```
+  
+  Usage example (HCL):
+  
+  ```hcl
+  cd_files = ["./somedirectory/meta-data", "./somedirectory/user-data"]
+  cd_label = "cidata"
+  ```
+  
+  The above will create a CD with two files, user-data and meta-data in the
+  CD root. This specific example is how you would create a CD that can be
+  used for an Ubuntu 20.04 autoinstall.
+  
+  Since globbing is also supported,
+  
+  ```hcl
+  cd_files = ["./somedirectory/*"]
+  cd_label = "cidata"
+  ```
+  
+  Would also be an acceptable way to define the above cd. The difference
+  between providing the directory with or without the glob is whether the
+  directory itself or its contents will be at the CD root.
+  
+  Use of this option assumes that you have a command line tool installed
+  that can handle the iso creation. Packer will use one of the following
+  tools:
+  
+    * xorriso
+    * mkisofs
+    * hdiutil (normally found in macOS)
+    * oscdimg (normally found in Windows as part of the Windows ADK)
+
+- `cd_content` (map[string]string) - Key/Values to add to the CD. The keys represent the paths, and the values
+  contents. It can be used alongside `cd_files`, which is useful to add large
+  files without loading them into memory. If any paths are specified by both,
+  the contents in `cd_content` will take precedence.
+  
+  Usage example (HCL):
+  
+  ```hcl
+  cd_files = ["vendor-data"]
+  cd_content = {
+    "meta-data" = jsonencode(local.instance_data)
+    "user-data" = templatefile("user-data", { packages = ["nginx"] })
+  }
+  cd_label = "cidata"
+  ```
+
+- `cd_label` (string) - CD Label
+
+<!-- End of code generated from the comments of the CDConfig struct in multistep/commonsteps/extra_iso_config.go; -->
+
+
 ### Communicator
 
-The builder supports the SSH communicator. The default SSH user is `spx`. A temporary key pair is generated
-for each build, and a cloud-init configuration creates that user (with passwordless `sudo`) and authorizes the
-key. This custom cloud-init replaces the default one of Superphenix.
+The builder supports the SSH and WinRM communicators.
+
+**SSH** (Linux). The default SSH user is `spx`. A temporary key pair is generated for each build, and a
+cloud-init configuration creates that user (with passwordless `sudo`) and authorizes the key. This custom
+cloud-init replaces the default one of Superphenix. With `iso_url`, the answer file you provide must create
+the user (see `user_data`).
+
+**WinRM** (Windows). Set `communicator = "winrm"` with `winrm_username` and `winrm_password`: the answer file
+of the installer must create that account and enable WinRM (see the Windows guide).
 
 <!-- Code generated from the comments of the Config struct in communicator/config.go; DO NOT EDIT MANUALLY -->
 
@@ -212,6 +420,50 @@ key. This custom cloud-init replaces the default one of Superphenix.
 <!-- End of code generated from the comments of the SSH struct in communicator/config.go; -->
 
 
+<!-- Code generated from the comments of the WinRM struct in communicator/config.go; DO NOT EDIT MANUALLY -->
+
+- `winrm_username` (string) - The username to use to connect to WinRM.
+
+- `winrm_password` (string) - The password to use to connect to WinRM.
+
+- `winrm_host` (string) - The address for WinRM to connect to.
+  
+  NOTE: If using an Amazon EBS builder, you can specify the interface
+  WinRM connects to via
+  [`ssh_interface`](/packer/plugins/builders/amazon/ebs#ssh_interface)
+
+- `winrm_no_proxy` (bool) - Setting this to `true` adds the remote
+  `host:port` to the `NO_PROXY` environment variable. This has the effect of
+  bypassing any configured proxies when connecting to the remote host.
+  Default to `false`.
+
+- `winrm_port` (int) - The WinRM port to connect to. This defaults to `5985` for plain
+  unencrypted connection and `5986` for SSL when `winrm_use_ssl` is set to
+  true.
+
+- `winrm_timeout` (duration string | ex: "1h5m2s") - The amount of time to wait for WinRM to become available. This defaults
+  to `30m` since setting up a Windows machine generally takes a long time.
+
+- `winrm_retry_interval` (duration string | ex: "1h5m2s") - The amount of time to wait between retries when attempting to connect to
+  WinRM. This defaults to `5s`.
+
+- `winrm_connect_timeout` (duration string | ex: "1h5m2s") - The timeout for each individual WinRM connection attempt. This defaults
+  to `0` (no per-attempt timeout; each attempt waits until the server
+  responds or resets the connection).
+
+- `winrm_use_ssl` (bool) - If `true`, use HTTPS for WinRM.
+
+- `winrm_insecure` (bool) - If `true`, do not check server certificate chain and host name.
+
+- `winrm_use_ntlm` (boolean) - If `true`, NTLMv2 authentication (with session security) will be used
+  for WinRM, rather than default (basic authentication), removing the
+  requirement for basic authentication to be enabled within the target
+  guest. Further reading for remote connection authentication can be found
+  [here](https://msdn.microsoft.com/en-us/library/aa384295(v=vs.85).aspx).
+
+<!-- End of code generated from the comments of the WinRM struct in communicator/config.go; -->
+
+
 ## Example
 
 ```hcl
@@ -242,7 +494,83 @@ build {
 }
 ```
 
+### Ubuntu Server ISO (autoinstall)
+
+```hcl
+source "superphenix" "ubuntu-iso" {
+  # api_url, org_id, az, project_id, token, subnet_eid, storage_class as above
+  iso_url   = "https://releases.ubuntu.com/26.04/ubuntu-26.04-live-server-amd64.iso"
+  cpu       = 2
+  memory    = "4Gi"
+  disk_size = "20Gi"
+
+  user_data = file("${path.root}/user-data.yml") # starts with #cloud-config, has an `autoinstall:` section
+
+  boot_wait = "2s"
+  boot_command = [
+    "<spacebar><wait><spacebar><wait><spacebar><wait>",
+    "e<wait><down><down><down><end><left><left><left><left>",
+    "autoinstall ",
+    "<wait><f10>",
+  ]
+
+  communicator = "ssh"
+  ssh_username = "adminsys"
+  ssh_password = var.ssh_password
+  ssh_timeout  = "40m"
+}
+```
+
+The key sequence inserts `autoinstall` before the `---` of the `linux` line in GRUB's editor (checked with the
+Ubuntu 26.04 live-server ISO). It depends on the ISO's GRUB menu: check it on a screenshot when you change
+release. The autoinstall must define the user that Packer connects with and enable SSH.
+
+## Windows Server (answer-file ISO)
+
+```hcl
+source "superphenix" "win2025" {
+  # api_url, org_id, az, project_id, token, subnet_eid, storage_class as above
+  vm_type  = "windows.2k25"  # sets UEFI, Secure Boot and TPM like the console does
+  disk_bus = "sata"          # no virtio storage driver during Windows setup
+  iso_url  = "https://example.com/windows-server-2025.iso"
+  cd_url   = "http://<host>/<random>/answers.iso"  # ISO holding autounattend.xml, hosted where Superphenix can download it
+
+  cpu       = 4
+  memory    = "8Gi"
+  disk_size = "50Gi"
+
+  http_directory = "${path.root}/scripts"  # serves the WinRM bootstrap to the VM
+  http_port_min  = 8080
+  http_port_max  = 8080
+
+  boot_wait    = "5s"
+  boot_command = ["<spacebar><wait3><spacebar><wait3><spacebar><wait3><spacebar><wait3><enter>"]
+
+  communicator   = "winrm"
+  winrm_username = "Administrateur"
+  winrm_password = var.win_password
+  winrm_use_ssl  = false
+  winrm_insecure = true
+  winrm_timeout  = "2h"
+}
+```
+
+How to build and host the answer-file ISO is in the Windows guide (`docs/windows.md` in the plugin repository);
+the Linux guide is `docs/linux.md`.
+
+## Guides
+
+Step-by-step guides in the plugin repository: [Linux](https://github.com/agora-calyce/packer-plugin-superphenix/blob/main/docs/linux.md)
+(cloud image, ISO, `user_data`, export) and [Windows](https://github.com/agora-calyce/packer-plugin-superphenix/blob/main/docs/windows.md)
+(answer-file ISO, hosting it, WinRM).
+
 ## Limitations
 
-- Only cloud images (`http` disk source) are supported. ISO installation is not supported yet.
-- Only the SSH communicator is supported. WinRM is not supported yet.
+- Linux ISO installs are tested with Ubuntu Server 26.04 (EFI, `user_data` autoinstall). Other installers, Secure
+  Boot and `tpm` are untested.
+- Windows is validated with Windows Server 2025 (French ISO) only: a full build (ISO install, WinRM,
+  provisioning) takes about 37 minutes, about 43 with the qcow2 export. Superphenix imports disks from a URL it can reach, so on a runner with a
+  private IP use `cd_url` instead of `cd_files` / `cd_content`. `floppy_*` is not supported.
+- The `superphenix-export` post-processor is validated on a VM built from a cloud image and on VMs built from an ISO (Ubuntu Server 26.04,
+  Windows Server 2025). The exported disk of an ISO build holds an EFI system: boot it with an EFI firmware (booting the exported qcow2 is not tested).
+- Sizes (`memory`, `disk_size`, ...) are whole GiB, written `4Gi` or `4`.

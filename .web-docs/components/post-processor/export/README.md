@@ -20,6 +20,17 @@ through a short-lived helper VM:
 The built VM, the helper and the exported disk are all deleted at the end of the post-processor. Only the
 `qcow2` file remains.
 
+~> **Windows and ISO builds:** the exported disk holds an EFI system, so boot the qcow2 with a UEFI firmware.
+Set `helper_disk_size` larger than the converted image (a Windows disk needs well above the default `30Gi`;
+`40Gi` worked for a 50 GiB system disk).
+
+The export is validated on a VM built from a cloud image and on ISO builds (Ubuntu Server 26.04: 6 GB file,
+Windows Server 2025: 12 GB file). Booting an exported qcow2 is not tested.
+
+~> **Disk space:** the machine running Packer needs free space for the qcow2. The post-processor checks the
+free space of the `output_path` volume before the download and fails with a clear message if it is too small
+(the check is skipped on Windows hosts). A local write error stops the download at once.
+
 ~> **Note:** the machine running Packer must reach the private IP of the helper, so it must run inside the
 Superphenix network (a VM in the subnet, or behind a VPN). SSH host keys of the helper are not verified, since
 the helper is created for the occasion and its key is not known in advance.
@@ -59,9 +70,9 @@ the helper is created for the occasion and its key is not known in advance.
 
 - `helper_cpu` (int) - vCPUs of the helper VM. Defaults to `2`.
 
-- `helper_memory` (string) - Memory of the helper VM, a whole number of GiB such as `2Gi`. Defaults to `2Gi`.
+- `helper_memory` (string) - Memory of the helper VM. Defaults to `2Gi`. Whole GiB only, between 1 and 5000: write `2Gi` or `2` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 
-- `helper_disk_size` (string) - Size of the helper's boot disk, a whole number of GiB such as `30Gi`. It
+- `helper_disk_size` (string) - Size of the helper's boot disk (whole GiB, `30Gi` or `30`). It
   also holds the converted qcow2, so it must be larger than the image
   produced. Defaults to `30Gi`.
 

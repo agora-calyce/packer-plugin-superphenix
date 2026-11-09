@@ -2,35 +2,38 @@
 
 Copy this file into the consuming project (for example as a section of its `AGENTS.md` or `CLAUDE.md`).
 Plugin source: `github.com/agora-calyce/superphenix`. Full reference: `docs/builders/superphenix.mdx`,
-`docs/post-processors/export.mdx`, working template: `example/ubuntu.pkr.hcl`, CI job: `example/.gitlab-ci.yml`.
+`docs/post-processors/export.mdx`. User guides: `docs/linux.md`, `docs/windows.md`. Working templates:
+`example/ubuntu.pkr.hcl` (cloud image), `example/ubuntu-iso.pkr.hcl` (Linux ISO), `example/windows/` (Windows),
+CI job: `example/.gitlab-ci.yml`.
 
 ## What it does
 
 | Component | Block | Result |
 |---|---|---|
-| Builder | `source "superphenix" "<name>"` | Creates a VM from a **cloud image URL**, provisions it over **SSH**, stops it. |
+| Builder | `source "superphenix" "<name>"` | Creates a VM from a **cloud image URL** or an **installer ISO** (Linux, Windows), provisions it over **SSH** or **WinRM**, stops it. |
 | Post-processor | `post-processor "superphenix-export"` | Converts the VM disk to **qcow2** through a temporary helper VM and downloads it to `output_path` on the machine running Packer. |
 
 The post-processor needs the builder artifact; it cannot be used with another builder.
 
 ## Hard constraints (check these before writing a template)
 
-1. **Packer must run inside the Superphenix subnet (or behind a VPN).** It SSHes to the *private* IP of the
-   build VM and of the helper. No EIP support. Outside the network the build hangs ~10 min then fails with
+1. **Packer must run inside the Superphenix subnet (or behind a VPN).** It connects (SSH, or WinRM for Windows)
+   to the *private* IP of the build VM, and over SSH to the helper's. No EIP support. Outside the network the build hangs ~10 min then fails with
    `ssh to helper ...`.
-2. **Cloud images only** (`source_url` = http(s) URL of a `.img`/`.qcow2`). No ISO, no `boot_command`,
-   no `http_directory`, no preseed/kickstart. ISO support is not implemented yet.
-3. **SSH only.** No WinRM, so no Windows.
-4. **Sizes are whole GiB strings**: `memory = "4Gi"`, `disk_size = "20Gi"`. No `4096`, `4G`, `512Mi`, `1.5Gi`.
+2. **Exactly one source**: `source_url` (http(s) URL of a cloud image `.img`/`.qcow2`) **or** `iso_url` (http(s)
+   URL of an installer ISO; Superphenix downloads it, so no local path and no `iso_checksum`). ISO installs
+   are only tested with Ubuntu Server 26.04 (see "ISO installs" below). Superphenix downloads every URL
+   itself (`source_url`, `iso_url`, `cd_url`, `helper_image_url`): they must be reachable from Superphenix.
+3. **Windows works with `cd_url`; read `docs/windows.md` first** (validated with Windows Server 2025 FR, about 37 min, 43 min with the qcow2 export; booting the exported qcow2 is not tested). Superphenix imports disks from a URL it can reach, not from the runner's private IP, so a generated ISO (`cd_files`/`cd_content`) cannot be imported from a private runner. Use `cd_url` with a hosted answer-file ISO (`example/windows/answer-iso/make-answer-iso.sh`); the WinRM bootstrap is then fetched from Packer's HTTP server (`http_directory`). The Windows installer has no curl/PowerShell and an AZERTY keyboard on French ISOs. `floppy_*` is not supported.
+4. **Sizes are whole GiB**: `memory = "4Gi"` or `"4"`, `disk_size = "20Gi"` or `"20"` (1 to 5000). No `4096Mi`, `4G`, `1.5Gi`: they are rejected. The plugin sends the bare number to the API.
 5. The token is a secret: pass it with `variable "token" { sensitive = true }` fed by `PKR_VAR_token`
    (masked CI variable). Never write it in a template, a log, a commit or a message.
 6. One build at a time per project (use GitLab `resource_group`).
 
 ## Required arguments
 
-Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `source_url`, `subnet_eid`, `storage_class`.
-Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, plus the usual `communicator = "ssh"`
-and `ssh_*` settings (`ssh_username` defaults to `spx`; the plugin creates that user itself with passwordless sudo).
+Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, and one of `source_url` / `iso_url`.
+Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, ISO only: `iso_disk_size` ("8Gi"), `disk_bus` ("virtio", `sata` for Windows), `efi` (true), `secure_boot`, `tpm`, `boot_command`, `boot_wait`, `http_content`/`http_directory`, `cd_url`/`cd_disk_size` (hosted answer-file ISO), `cd_files`/`cd_content`/`cd_label`. Communicator: `communicator = "ssh"` with the usual `ssh_*` settings (`ssh_username` defaults to `spx`; with a cloud image the plugin creates that user itself with passwordless sudo), or `communicator = "winrm"` with `winrm_username` and `winrm_password` (Windows).
 
 Post-processor: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, `output_path`,
 `helper_image_url` (any cloud-init Linux cloud image that can install `qemu-utils`; reusing the build image works).
@@ -97,15 +100,21 @@ build {
 
 | `qemu` | `superphenix` |
 |---|---|
-| `iso_url` / `disk_image = true` + `iso_url` | `source_url` (must be a cloud image, not an installer ISO) |
-| `iso_checksum` | none (not supported) |
+| `iso_url` (installer ISO) | `iso_url` (http(s) only) |
+| `iso_url` + `disk_image = true` (cloud image) | `source_url` |
+| `iso_checksum`, `iso_target_extension` | none (drop) |
 | `cpus`, `memory` (MB int) | `cpu`, `memory = "<n>Gi"` |
 | `disk_size` | `disk_size = "<n>Gi"` |
 | `output_directory`, `vm_name`, `format = "qcow2"` | `post-processor "superphenix-export"` with `output_path = "<dir>/<name>.qcow2"` |
 | `accelerator`, `headless`, `display`, `qemuargs`, `net_device`, `disk_interface` | drop (no equivalent) |
-| `http_directory`, `boot_command`, `boot_wait` | drop; use a cloud image + `user_data` (cloud-config) and/or `provisioner` |
+| `http_content`, `http_directory`, `boot_wait` | keep (VM must reach the Packer machine; prefer `user_data`) |
+| `boot_command` | keep, typed over VNC. GRUB UEFI differs from BIOS: see "ISO installs" |
+| `efi_boot`, `efi_firmware_*`, `qemuargs` | drop; `efi` (default true for ISO), `secure_boot`, `tpm` |
+| `cd_files`/`cd_content` | only if Superphenix can reach the runner; otherwise `cd_url` (hosted ISO) |
+| `floppy_*` | not supported |
 | `shutdown_command` | drop (the plugin stops the VM through the API) |
-| `ssh_*` | keep `communicator = "ssh"` and `ssh_username`; password auth is not set up by the plugin, use the generated key |
+| `ssh_*` | keep `communicator = "ssh"` and `ssh_username`; with a cloud image the plugin authorizes a generated key (no password); with an ISO your answer file creates the user |
+| `winrm_*` | keep `communicator = "winrm"`; the answer file must create the account and enable WinRM |
 | none | add `subnet_eid`, `storage_class`, `api_url`, `org_id`, `az`, `project_id`, `token` |
 
 Provisioners (`shell`, `file`, `ansible`...) and other post-processors work unchanged. Update CI: replace
@@ -114,10 +123,33 @@ the QEMU/KVM runner requirement by a runner **inside the subnet**, export `PKR_V
 
 ## Customizing with cloud-init (`user_data`)
 
-`user_data = file("user-data.yml")` injects extra cloud-init into the build VM. Only `#cloud-config` YAML is
-accepted (no shell script or MIME). It is merged with the plugin's config: `users` and `packages` are appended
-(the SSH user is always created), every other key of yours wins. It applies to the build VM only, not to the export
-helper. Prefer `provisioner` blocks for anything that must run after SSH is up.
+`user_data = file("user-data.yml")` sets cloud-init on the build VM's instance (the "CloudInit configuration" of the
+console). Only `#cloud-config` YAML is accepted (no shell script or MIME), checked at `packer validate`. It never
+applies to the export helper. The behaviour depends on the source:
+
+| Source | What happens to `user_data` |
+|---|---|
+| `source_url` (cloud image) | **Merged** with the plugin's cloud-init: `users` and `packages` lists are appended (the SSH user, with passwordless sudo and the temporary key, is always created); every other key of yours wins. |
+| `iso_url` (installer) | **Passed as is**, no merge and no SSH user added. The installer reads it from the VM's cloud-init disk (for Ubuntu, an `autoinstall:` section). Your config must create the user Packer connects with and enable SSH. |
+
+Prefer `provisioner` blocks for anything that must run after SSH is up. `user_data` is for first-boot cloud-init
+(cloud image) or the installer's answer file (ISO).
+
+## ISO installs
+
+`example/ubuntu-iso.pkr.hcl` is a tested template (Ubuntu Server 26.04). The mechanism:
+
+- Disks: empty `disk_size` disk first, ISO as CD-ROM second, **UEFI** firmware (BIOS never boots the CD-ROM).
+  The installed disk boots by itself after the installer reboots; the ISO disk is deleted at the end.
+- Answer file: put it in `user_data` (`#cloud-config` with an `autoinstall:` section). It is set on the instance's
+  cloud-init, read by the installer without any network, and passed as is. Prefer it over `http_content`, which
+  needs the VM to reach the Packer machine (a security group may block it).
+- `boot_command` keeps `autoinstall` on the kernel command line, inserted **before** the `---` of the `linux`
+  line: `e<wait><down><down><down><end><left><left><left><left>` then `autoinstall `, then `<f10>`. It depends on
+  the ISO: when changing release, check the GRUB editor on a VNC screenshot instead of guessing.
+- The autoinstall must create the SSH user Packer uses and enable SSH (with `allow-pw` for password auth).
+- The post-processor has not been re-tested on a VM built from an ISO. The qcow2 holds an EFI system: boot it with EFI.
+- Windows: see `docs/windows.md` (answer-file ISO, hosting, `validate-answer-iso.py`).
 
 ## Validate and run
 
@@ -135,6 +167,9 @@ Typical durations: image import a few minutes, then provisioning, then conversio
 
 | Symptom | Cause / action |
 |---|---|
+| `exactly one of source_url and iso_url is required` | Set only one source. |
+| ISO build stuck at "No bootable device" | Firmware is BIOS: leave `efi` unset (default true) for `iso_url`. |
+| Installer asks questions / ignores the answer file | `autoinstall` missing from the kernel line, or typed after `---`; check the GRUB screen. |
 | `Unsupported argument "eip_eid"` / `"runner_cidr"` | Removed options. Delete them; run Packer inside the subnet. |
 | `memory: ...` / `disk_size: ...` error | Use whole GiB strings like `"4Gi"`. |
 | `<arg> is required` | Fill the listed argument (both blocks need their own connection arguments). |
@@ -143,6 +178,7 @@ Typical durations: image import a few minutes, then provisioning, then conversio
 | `401`/`403` from the API | Token wrong, expired, or lacks rights on the project. Do not print it while debugging. |
 | Export disk not found | Set `disk_device` (for example `/dev/vdb`). |
 | Output file empty/truncated, no space | Increase `helper_disk_size` (it holds the converted qcow2). |
+| `not enough free space for <output_path>` | The Packer machine's volume cannot hold the qcow2 (6 GB for Ubuntu 26.04, 13 GB for Windows Server 2025). Free space or change `output_path`. The plugin checks before the download. |
 
 Failed or cancelled runs delete their resources. If Packer was killed (SIGKILL, runner crash), orphans may
 remain: look for VMs/disks labelled `user.superphenix.net/created-by:packer*` (builder: `packer`, helper:

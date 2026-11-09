@@ -28,12 +28,27 @@ $ packer plugins install github.com/agora-calyce/superphenix
 #### Builders
 
 - [superphenix](/packer/integrations/agora-calyce/superphenix/latest/components/builder/superphenix) - Creates a VM
-  from a cloud image, provisions it over SSH, then stops it.
+  from a cloud image or an installation ISO (Linux, and Windows with an answer-file ISO), provisions it over SSH
+  or WinRM, then stops it.
 
 #### Post-processors
 
 - [superphenix-export](/packer/integrations/agora-calyce/superphenix/latest/components/post-processor/export) -
   Converts the disk of the built VM to `qcow2` and downloads it to the machine running Packer.
+
+### Guides
+
+Step-by-step guides in the plugin repository:
+
+- [Building Linux images](https://github.com/agora-calyce/packer-plugin-superphenix/blob/main/docs/linux.md): cloud
+  images, ISO installs with `user_data`, export.
+- [Building Windows images](https://github.com/agora-calyce/packer-plugin-superphenix/blob/main/docs/windows.md):
+  the answer-file ISO, how to host it, WinRM.
+
+### Requirements
+
+The machine running Packer must be inside the Superphenix subnet (or behind a VPN): it reaches the build VM and
+the export helper on their private IPs.
 
 ### Authentication
 

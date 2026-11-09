@@ -1,0 +1,61 @@
+# Plugin goreleaser configuration, INACTIVE while it stays in release/ (see release/README.md).
+# To enable it: move it to the repository root as `.goreleaser.yml`.
+# Based on the HashiCorp template (packer-plugin-scaffolding), adapted: the version lives in the `main` package.
+version: 2
+
+env:
+  - CGO_ENABLED=0
+
+before:
+  hooks:
+    - go mod tidy
+    # Checks that the plugin is compatible with the Packer SDK version.
+    - make plugin-check
+
+builds:
+  - mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    # The published version is the tag's; the pre-release is emptied (otherwise `packer init` rejects `>= x.y.z`).
+    ldflags:
+      - '-s -w -X main.Version={{ .Version }} -X main.VersionPrerelease='
+    goos: [freebsd, windows, linux, darwin]
+    goarch: [amd64, '386', arm, arm64]
+    ignore:
+      - goos: darwin
+        goarch: '386'
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: '386'
+    # API_VERSION is computed by the workflow (`go run . describe`): it is part of the binary names.
+    binary: '{{ .ProjectName }}_v{{ .Version }}_{{ .Env.API_VERSION }}_{{ .Os }}_{{ .Arch }}'
+
+archives:
+  - formats: [zip]
+    files:
+      - none*
+    name_template: '{{ .ProjectName }}_v{{ .Version }}_{{ .Env.API_VERSION }}_{{ .Os }}_{{ .Arch }}'
+
+checksum:
+  name_template: '{{ .ProjectName }}_v{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+
+# GPG signature of the checksums: required by Packer to install a plugin (`packer init`).
+signs:
+  - artifacts: checksum
+    args:
+      - '--batch'
+      - '--local-user'
+      - '{{ .Env.GPG_FINGERPRINT }}'
+      - '--output'
+      - '${signature}'
+      - '--detach-sign'
+      - '${artifact}'
+
+release:
+  # Leaving the release as a draft allows reviewing it before publication; remove this line to publish right away.
+  draft: true
+
+changelog:
+  disable: true

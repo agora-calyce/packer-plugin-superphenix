@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -67,5 +69,35 @@ func TestExportOrderAndCleanup(t *testing.T) {
 				t.Errorf("transferErr=%v: missing %q in %s", terr, want, got)
 			}
 		}
+	}
+}
+
+func TestEnsureOutputDir(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "a", "b", "image.qcow2")
+	if err := ensureOutputDir(out); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := os.Stat(filepath.Dir(out)); err != nil || !st.IsDir() {
+		t.Fatalf("parent directory not created: %v", err)
+	}
+	if err := ensureOutputDir(out); err != nil { // already present: no effect
+		t.Fatal(err)
+	}
+}
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
+
+func TestLocalWriterKeepsFirstError(t *testing.T) {
+	lw := &localWriter{w: failWriter{}}
+	if _, err := lw.Write([]byte("x")); err == nil || lw.err == nil {
+		t.Fatalf("write error not kept: %v / %v", err, lw.err)
+	}
+}
+
+func TestFreeBytes(t *testing.T) {
+	if free, err := freeBytes(t.TempDir()); err != nil || free == 0 {
+		t.Skipf("free space unavailable here: %d, %v", free, err)
 	}
 }

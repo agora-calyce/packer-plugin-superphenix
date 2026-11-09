@@ -5,6 +5,8 @@ post-processor `superphenix-export` (qcow2 export). Built for CI.
 
 - **Using the plugin in a Packer project** (templates, QEMU migration, troubleshooting): read
   [`docs/agent-usage.md`](docs/agent-usage.md).
+- **User guides**: [`docs/linux.md`](docs/linux.md) and [`docs/windows.md`](docs/windows.md) (keep them in sync with config changes).
+- **Test infrastructure** on Superphenix (runner, ISO host, EIP, security groups): [`docs/test-infrastructure.md`](docs/test-infrastructure.md).
 - **Changing the plugin**: read [`DESIGN.md`](DESIGN.md) (API endpoints, export flow, known quirks),
   then the rules below.
 
@@ -13,11 +15,11 @@ post-processor `superphenix-export` (qcow2 export). Built for CI.
 | Path | Role |
 |---|---|
 | `main.go` | Plugin registration. |
-| `builder/` | Builder: `builder.go` (config, `Prepare`, steps list), `steps.go` (create VM, stop). |
+| `builder/` | Builder: `builder.go` (config, `Prepare`, steps list), `steps.go` (create VM/disks, boot command, wait IP, stop, drop ISO and CD disks). |
 | `postprocessor/` | Export: `postprocessor.go` (helper VM flow, deferred cleanup), `transfer.go` (SSH conversion + resumable download). |
-| `internal/client/` | Hand-written Superphenix HTTP client (no public Go SDK). |
-| `docs/`, `docs-partials/` | Reference docs (`.mdx`) and generated partials. |
-| `example/` | Reference template and GitLab CI job. |
+| `internal/client/` | Hand-written Superphenix HTTP client (no public Go SDK); `vnc.go` is a minimal RFB keyboard client. |
+| `docs/`, `docs-partials/` | Reference docs (`.mdx`), user guides (`linux.md`, `windows.md`), agent guide, and generated partials. |
+| `example/` | Reference templates (cloud image, Linux ISO, `windows/` with the answer-file ISO scripts) and GitLab CI job. |
 
 ## Commands
 
@@ -33,12 +35,14 @@ make plugin-check
 
 - After editing a `Config` struct or its field comments, run `make generate`; never hand-edit
   `*.hcl2spec.go` or `docs-partials/`.
-- Config/behaviour changes: update `docs/`, `README.md`, `example/`, `docs/agent-usage.md` and
+- Config/behaviour changes: update `docs/`, `README.md`, `example/`, `docs/agent-usage.md`, `docs/linux.md`, `docs/windows.md` and
   `CHANGELOG.md` (flag breaking changes).
 - Every resource created on Superphenix must be removed by a `defer`/`Cleanup` (success, failure, Ctrl-C)
   and carry a `user.superphenix.net/created-by:packer*` label.
 - Superphenix API quirks are in `DESIGN.md` (sizes as whole GiB, disk attach only at VM creation, async VM
   deletion, wait for disk import `Succeeded`). Check them before touching `internal/client` or the flows.
+- ISO installs need EFI (BIOS never boots the CD-ROM) and `autoinstall` before `---`; read the ISO installs section of `DESIGN.md` before touching the ISO flow. Debug a boot by reading the VNC screen, not by guessing.
+- Windows: Superphenix imports disks from a URL **it** reaches (not the runner's private IP): use `cd_url`, read `docs/windows.md` and the Windows section of `DESIGN.md` before touching the CD/WinRM flow.
 - Network model: the runner reaches **private IPs** (no EIP). Do not reintroduce public exposure silently.
 - Secrets: the API token is never logged, printed, or put in examples. Examples use variables.
 - Everything is written in English: code comments, docs, tests, commit messages. Prefer the smallest change.
