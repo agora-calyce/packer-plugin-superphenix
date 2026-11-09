@@ -12,12 +12,12 @@ Type: `superphenix`
 Artifact BuilderId: `agora-calyce.superphenix`
 
 The `superphenix` builder creates a boot disk from a cloud image (`source_url`) or installs one from an ISO
-(`iso_url`), creates a VM that boots from it, waits for the VM to get an IP address, connects over SSH, runs the
-provisioners, then stops the VM. The VM is kept so
+(`iso_url`), creates a VM that boots from it, waits for the VM to get an IP address, connects over SSH (Linux) or WinRM
+(Windows), runs the provisioners, then stops the VM. The VM is kept so
 that the [superphenix-export](/packer/integrations/agora-calyce/superphenix/latest/components/post-processor/export)
 post-processor can export its disk. If the build fails or is cancelled, the VM and its disk are deleted.
 
-The machine running Packer must be able to reach the VM's **private** IP address over SSH, since the builder
+The machine running Packer must be able to reach the VM's **private** IP address (SSH or WinRM), since the builder
 does not expose the VM publicly. In practice, run Packer on a VM inside the subnet (or behind a VPN).
 
 ## Sources
@@ -53,15 +53,45 @@ alphabetized.
 
 @include 'builder/Config-not-required.mdx'
 
+### HTTP server
+
+`http_content`, `http_directory` and the port options serve files to the VM (`{{ .HTTPIP }}` and
+`{{ .HTTPPort }}` in `boot_command`). The VM must be able to reach the Packer machine on that port.
+
+@include 'packer-plugin-sdk/multistep/commonsteps/HTTPConfig-not-required.mdx'
+
+### Boot command
+
+`boot_command` is typed on the VM's VNC console (ISO installs only), after `boot_wait`. The keyboard layout is
+the installer's: on a French Windows installer, keys are mapped as on an AZERTY keyboard.
+
+@include 'packer-plugin-sdk/bootcommand/BootConfig-not-required.mdx'
+
+### CD (generated ISO)
+
+`cd_files`, `cd_content` and `cd_label` generate an ISO on the Packer machine (`xorriso`, `mkisofs` or similar
+required) that Superphenix then imports from Packer's HTTP server: this only works if Superphenix can reach
+the Packer machine. Otherwise host a ready-made ISO and use `cd_url`.
+
+@include 'packer-plugin-sdk/multistep/commonsteps/CDConfig-not-required.mdx'
+
 ### Communicator
 
-The builder supports the SSH communicator. The default SSH user is `spx`. A temporary key pair is generated
-for each build, and a cloud-init configuration creates that user (with passwordless `sudo`) and authorizes the
-key. This custom cloud-init replaces the default one of Superphenix.
+The builder supports the SSH and WinRM communicators.
+
+**SSH** (Linux). The default SSH user is `spx`. A temporary key pair is generated for each build, and a
+cloud-init configuration creates that user (with passwordless `sudo`) and authorizes the key. This custom
+cloud-init replaces the default one of Superphenix. With `iso_url`, the answer file you provide must create
+the user (see `user_data`).
+
+**WinRM** (Windows). Set `communicator = "winrm"` with `winrm_username` and `winrm_password`: the answer file
+of the installer must create that account and enable WinRM (see the Windows guide).
 
 @include 'packer-plugin-sdk/communicator/Config-not-required.mdx'
 
 @include 'packer-plugin-sdk/communicator/SSH-not-required.mdx'
+
+@include 'packer-plugin-sdk/communicator/WinRM-not-required.mdx'
 
 ## Example
 
@@ -124,11 +154,53 @@ The key sequence inserts `autoinstall` before the `---` of the `linux` line in G
 Ubuntu 26.04 live-server ISO). It depends on the ISO's GRUB menu: check it on a screenshot when you change
 release. The autoinstall must define the user that Packer connects with and enable SSH.
 
+## Windows Server (answer-file ISO)
+
+```hcl
+source "superphenix" "win2025" {
+  # api_url, org_id, az, project_id, token, subnet_eid, storage_class as above
+  vm_type  = "windows.2k25"  # sets UEFI, Secure Boot and TPM like the console does
+  disk_bus = "sata"          # no virtio storage driver during Windows setup
+  iso_url  = "https://example.com/windows-server-2025.iso"
+  cd_url   = "http://<host>/<random>/answers.iso"  # ISO holding autounattend.xml, hosted where Superphenix can download it
+
+  cpu       = 4
+  memory    = "8Gi"
+  disk_size = "50Gi"
+
+  http_directory = "${path.root}/scripts"  # serves the WinRM bootstrap to the VM
+  http_port_min  = 8080
+  http_port_max  = 8080
+
+  boot_wait    = "5s"
+  boot_command = ["<spacebar><wait3><spacebar><wait3><spacebar><wait3><spacebar><wait3><enter>"]
+
+  communicator   = "winrm"
+  winrm_username = "Administrateur"
+  winrm_password = var.win_password
+  winrm_use_ssl  = false
+  winrm_insecure = true
+  winrm_timeout  = "2h"
+}
+```
+
+How to build and host the answer-file ISO is in the Windows guide (`docs/windows.md` in the plugin repository);
+the Linux guide is `docs/linux.md`.
+
+## Guides
+
+Step-by-step guides in the plugin repository: [Linux](https://github.com/agora-calyce/packer-plugin-superphenix/blob/main/docs/linux.md)
+(cloud image, ISO, `user_data`, export) and [Windows](https://github.com/agora-calyce/packer-plugin-superphenix/blob/main/docs/windows.md)
+(answer-file ISO, hosting it, WinRM).
+
 ## Limitations
 
-- ISO installs are tested with Ubuntu Server 26.04 (EFI, `user_data` autoinstall). Other installers, Secure Boot
-  and `tpm` are untested.
-- Only the SSH communicator is supported. WinRM is not supported yet, so no Windows images yet.
-- No `cd_files` / `cd_content` / `floppy_*` yet.
-- The `superphenix-export` post-processor has not been re-tested on a VM built from an ISO. The exported disk
-  holds an EFI system: boot it with an EFI firmware.
+- Linux ISO installs are tested with Ubuntu Server 26.04 (EFI, `user_data` autoinstall). Other installers, Secure
+  Boot and `tpm` are untested.
+- Windows is validated with Windows Server 2025 (French ISO) only: a full build (ISO install, WinRM,
+  provisioning) takes about 37 minutes, about 43 with the qcow2 export. Superphenix imports disks from a URL it can reach, so on a runner with a
+  private IP use `cd_url` instead of `cd_files` / `cd_content`. `floppy_*` is not supported.
+- The `superphenix-export` post-processor is validated on a VM built from a cloud image and on a Windows Server
+  2025 VM built from an ISO. It has not been tested on a Linux VM built from an ISO. The exported disk of an ISO
+  build holds an EFI system: boot it with an EFI firmware (booting the exported qcow2 is not tested).
+- Sizes (`memory`, `disk_size`, ...) are whole GiB, written `4Gi` or `4`.

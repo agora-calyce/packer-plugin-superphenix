@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -36,6 +37,21 @@ type progress struct {
 func (p *progress) Write(b []byte) (int, error) {
 	p.last.Store(time.Now().UnixNano())
 	return p.w.Write(b)
+}
+
+// localWriter mémorise la première erreur d'écriture locale (disque plein, droits...) : elle n'a rien à voir
+// avec le réseau, donc reprendre le téléchargement serait inutile.
+type localWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (l *localWriter) Write(b []byte) (int, error) {
+	n, err := l.w.Write(b)
+	if err != nil && l.err == nil {
+		l.err = err
+	}
+	return n, err
 }
 
 // pull copie remoteOut à partir de l'offset off vers w. Une connexion figée est fermée par un chien de garde.
@@ -140,6 +156,11 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 	if err != nil {
 		return fmt.Errorf("remote size %q: %w", sz, err)
 	}
+	// Échec rapide : ne pas télécharger des Go vers un disque qui ne peut pas les contenir.
+	if free, ferr := freeBytes(filepath.Dir(out)); ferr == nil && uint64(size) > free {
+		return fmt.Errorf("not enough free space for %s: the qcow2 is %d bytes, only %d are free in %s (free some space or point output_path to a larger volume)",
+			out, size, free, filepath.Dir(out))
+	}
 
 	f, err := os.Create(out)
 	if err != nil {
@@ -151,6 +172,7 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 			os.Remove(out) // pas de qcow2 partiel
 		}
 	}()
+	lw := &localWriter{w: f}
 	var got int64
 	for resumes := 0; got < size; resumes++ {
 		if resumes > maxResumes {
@@ -163,7 +185,10 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 				return err
 			}
 		}
-		perr := pull(cli, f, got)
+		perr := pull(cli, lw, got)
+		if lw.err != nil {
+			return fmt.Errorf("write %s: %w", out, lw.err)
+		}
 		if got, err = f.Seek(0, io.SeekEnd); err != nil {
 			return err
 		}

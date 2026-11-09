@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
 	"github.com/hashicorp/hcl/v2/hcldec"
@@ -24,6 +25,7 @@ type Config struct {
 	common.PackerConfig    `mapstructure:",squash"`
 	Comm                   communicator.Config `mapstructure:",squash"`
 	commonsteps.HTTPConfig `mapstructure:",squash"`
+	commonsteps.CDConfig   `mapstructure:",squash"`
 	bootcommand.BootConfig `mapstructure:",squash"`
 
 	// Base URL of the Superphenix API, for example `https://api.superphenix.example`.
@@ -51,18 +53,31 @@ type Config struct {
 	// UEFI firmware for ISO installs. Defaults to `true`: BIOS only tries the
 	// hard disk, so the ISO would never boot. Windows needs EFI anyway.
 	EFI *bool `mapstructure:"efi"`
-	// Enable UEFI Secure Boot (ISO installs with EFI). Defaults to `false`.
-	SecureBoot bool `mapstructure:"secure_boot"`
-	// Add a TPM device to the VM (ISO installs). Defaults to `false`.
-	TPM bool `mapstructure:"tpm"`
-	// Size of the disk holding the ISO, a whole number of GiB larger than the
-	// ISO. Defaults to `8Gi`.
+	// Enable UEFI Secure Boot (ISO installs with EFI). Defaults to `false`,
+	// or to what `vm_type` defines when `vm_type` is set and none of `efi`,
+	// `secure_boot` and `tpm` is.
+	SecureBoot *bool `mapstructure:"secure_boot"`
+	// Add a TPM device to the VM (ISO installs). Defaults to `false`, or to
+	// what `vm_type` defines (see `secure_boot`).
+	TPM *bool `mapstructure:"tpm"`
+	// URL of a ready-made ISO (an `http` disk source that Superphenix downloads
+	// itself) attached as a second CD-ROM, typically an answer-file ISO
+	// (`autounattend.xml`) for Windows. Needs `iso_url`; exclusive with
+	// `cd_files` and `cd_content`. Use it when Superphenix cannot reach the
+	// Packer machine to import a generated ISO.
+	CDURL string `mapstructure:"cd_url"`
+	// Size of the `cd_url` disk, larger than the ISO. Defaults to `1Gi`. Whole GiB only, between 1 and 5000: write `1Gi` or `1` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+	CDDiskSize string `mapstructure:"cd_disk_size"`
+	// Bus of the system disk of an ISO install: `virtio` (default) or `sata`.
+	// Windows has no virtio storage driver during setup, so use `sata` for it.
+	DiskBus string `mapstructure:"disk_bus"`
+	// Size of the disk holding the ISO, larger than the ISO. Defaults to `8Gi`. Whole GiB only, between 1 and 5000: write `8Gi` or `8` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 	ISODiskSize string `mapstructure:"iso_disk_size"`
 	// Number of vCPUs. Defaults to `2`.
 	CPU int `mapstructure:"cpu"`
-	// Amount of memory, a whole number of GiB such as `4Gi`. Defaults to `4Gi`.
+	// Amount of memory. Defaults to `4Gi`. Whole GiB only, between 1 and 5000: write `4Gi` or `4` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 	Memory string `mapstructure:"memory"`
-	// Size of the boot disk, a whole number of GiB such as `20Gi`. Defaults to `20Gi`.
+	// Size of the boot disk. Defaults to `20Gi`. Whole GiB only, between 1 and 5000: write `20Gi` or `20` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 	DiskSize string `mapstructure:"disk_size"`
 	// Storage class of the boot disk, for example `block-standard`. The
 	// available classes are listed by `GET .../{az}/{project_id}/storage-class`.
@@ -83,6 +98,8 @@ type Config struct {
 	VMType string `mapstructure:"vm_type"`
 }
 
+func (c *Config) hasCD() bool { return len(c.CDFiles) > 0 || len(c.CDContent) > 0 }
+
 type Builder struct{ config Config }
 
 func (b *Builder) ConfigSpec() hcldec.ObjectSpec { return b.config.FlatMapstructure().HCL2Spec() }
@@ -90,7 +107,7 @@ func (b *Builder) ConfigSpec() hcldec.ObjectSpec { return b.config.FlatMapstruct
 func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	if err := config.Decode(&b.config, &config.DecodeOpts{PluginType: "superphenix", Interpolate: true,
 		InterpolateContext: &interpolate.Context{},
-		InterpolateFilter:  &interpolate.RenderFilter{Exclude: []string{"boot_command", "http_content"}}}, raws...); err != nil {
+		InterpolateFilter:  &interpolate.RenderFilter{Exclude: []string{"boot_command", "http_content", "cd_content"}}}, raws...); err != nil {
 		return nil, nil, err
 	}
 	c := &b.config
@@ -103,10 +120,16 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	if c.DiskSize == "" {
 		c.DiskSize = "20Gi"
 	}
+	if c.CDDiskSize == "" {
+		c.CDDiskSize = "1Gi"
+	}
+	if c.DiskBus == "" {
+		c.DiskBus = "virtio"
+	}
 	if c.ISODiskSize == "" {
 		c.ISODiskSize = "8Gi"
 	}
-	if c.Comm.SSHUsername == "" {
+	if c.Comm.SSHUsername == "" && c.Comm.Type != "winrm" {
 		c.Comm.SSHUsername = "spx" // user cloud-init par défaut de Superphenix
 	}
 	var errs []error
@@ -126,6 +149,19 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 		errs = append(errs, errors.New("boot_command needs iso_url"))
 	}
 	errs = append(errs, c.HTTPConfig.Prepare(&interpolate.Context{})...)
+	errs = append(errs, c.CDConfig.Prepare(&interpolate.Context{})...)
+	if c.hasCD() && c.ISOURL == "" {
+		errs = append(errs, errors.New("cd_files and cd_content need iso_url"))
+	}
+	if c.CDURL != "" && (c.ISOURL == "" || c.hasCD()) {
+		errs = append(errs, errors.New("cd_url needs iso_url and cannot be combined with cd_files/cd_content"))
+	}
+	if _, err := client.GiB(c.CDDiskSize); err != nil {
+		errs = append(errs, fmt.Errorf("cd_disk_size: %w", err))
+	}
+	if c.hasCD() && (c.HTTPDir != "" || len(c.HTTPContent) > 0) {
+		errs = append(errs, errors.New("cd_files/cd_content cannot be combined with http_directory/http_content"))
+	}
 	errs = append(errs, c.BootConfig.Prepare(&interpolate.Context{})...)
 	if _, err := client.GiB(c.DiskSize); err != nil {
 		errs = append(errs, fmt.Errorf("disk_size: %w", err))
@@ -150,19 +186,37 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	state.Put("hook", hook)
 	state.Put("ui", ui)
 
-	steps := []multistep.Step{
-		&communicator.StepSSHKeyGen{CommConf: &c.Comm, SSHTemporaryKeyPair: c.Comm.SSHTemporaryKeyPair},
+	var steps []multistep.Step
+	if c.Comm.Type != "winrm" {
+		steps = append(steps, &communicator.StepSSHKeyGen{CommConf: &c.Comm, SSHTemporaryKeyPair: c.Comm.SSHTemporaryKeyPair})
+	}
+	if c.hasCD() {
+		// L'ISO générée est servie par le serveur HTTP de Packer dans un dossier temporaire, puis importée par Superphenix.
+		dir, err := os.MkdirTemp("", "packer-spx-cd-")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(dir)
+		c.HTTPDir = dir
+		steps = append(steps,
+			&commonsteps.StepCreateCD{Files: c.CDFiles, Content: c.CDContent, Label: c.CDLabel},
+			&stepStageCD{dir: dir})
+	}
+	steps = append(steps,
 		commonsteps.HTTPServerFromHTTPConfig(&c.HTTPConfig),
 		&stepCreate{},
 		&stepBootCommand{},
 		&stepWaitIP{},
 		&communicator.StepConnect{Config: &c.Comm, Host: func(s multistep.StateBag) (string, error) {
 			return s.Get("ip").(string), nil
-		}, SSHConfig: c.Comm.SSHConfigFunc()},
+		}, SSHConfig: c.Comm.SSHConfigFunc(),
+			WinRMConfig: func(multistep.StateBag) (*communicator.WinRMConfig, error) {
+				return &communicator.WinRMConfig{Username: c.Comm.WinRMUser, Password: c.Comm.WinRMPassword}, nil
+			}},
 		&commonsteps.StepProvision{},
 		&stepStop{},
 		&stepDropISO{},
-	}
+	)
 	r := commonsteps.NewRunner(steps, c.PackerConfig, ui)
 	r.Run(ctx, state)
 

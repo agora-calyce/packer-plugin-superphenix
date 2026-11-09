@@ -87,7 +87,7 @@ build {
     inline = ["cat /etc/os-release | head -2"]
   }
 
-  # Non testé sur une VM issue d'une ISO (testé depuis une cloud image).
+  # Export validé depuis une cloud image et depuis une VM Windows issue d'une ISO ; non testé sur un Linux issu d'une ISO.
   post-processor "superphenix-export" {
     api_url          = var.api_url
     org_id           = var.org_id

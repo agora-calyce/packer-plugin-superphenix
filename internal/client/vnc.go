@@ -8,13 +8,17 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
 
 // VNC : client RFB minimal (clavier seulement) sur le WebSocket `instance/{id}/vnc`.
 // ponytail: sécurité RFB "None" uniquement (celle du proxy Superphenix) ; pas d'écran, pas de souris.
-type VNC struct{ ws *websocket.Conn }
+type VNC struct {
+	ws   *websocket.Conn
+	done chan struct{}
+}
 
 // DialVNC ouvre la console VNC de l'instance et fait la poignée de main RFB 3.8.
 func (c *Client) DialVNC(ctx context.Context, id string) (*VNC, error) {
@@ -34,11 +38,12 @@ func (c *Client) DialVNC(ctx context.Context, id string) (*VNC, error) {
 		return nil, fmt.Errorf("vnc: %w", err)
 	}
 	ws.PayloadType = websocket.BinaryFrame
-	v := &VNC{ws}
+	v := &VNC{ws: ws, done: make(chan struct{})}
 	if err := v.handshake(); err != nil {
 		ws.Close()
 		return nil, fmt.Errorf("vnc handshake: %w", err)
 	}
+	go v.keepAlive()
 	return v, nil
 }
 
@@ -99,4 +104,23 @@ func (v *VNC) KeyEvent(key uint32, down bool) error {
 	return err
 }
 
-func (v *VNC) Close() error { return v.ws.Close() }
+// keepAlive : le proxy coupe la session après ~1 min sans trafic (attentes longues d'un boot_command, ex. Windows).
+// On vide les messages du serveur et on redemande une mise à jour d'1 pixel toutes les 10 s.
+func (v *VNC) keepAlive() {
+	go io.Copy(io.Discard, v.ws)
+	req := []byte{3, 1, 0, 0, 0, 0, 0, 1, 0, 1} // FramebufferUpdateRequest incrémentale 1x1
+	for t := time.NewTicker(10 * time.Second); ; {
+		select {
+		case <-v.done:
+			t.Stop()
+			return
+		case <-t.C:
+			v.ws.Write(req)
+		}
+	}
+}
+
+func (v *VNC) Close() error {
+	close(v.done)
+	return v.ws.Close()
+}

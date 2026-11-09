@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -118,5 +119,46 @@ func TestISOCreateBody(t *testing.T) {
 	}
 	if !got.Advanced.Firmware.Bootloader.EFI.Enabled {
 		t.Error("EFI must be enabled by default in ISO mode")
+	}
+}
+
+func TestCDURLBody(t *testing.T) {
+	var body []byte
+	var diskURLs []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/disk"):
+			b, _ := io.ReadAll(r.Body)
+			diskURLs = append(diskURLs, string(b))
+			w.Write([]byte(fmt.Sprintf(`{"eid":"d%d"}`, len(diskURLs))))
+		case r.Method == "POST":
+			body, _ = io.ReadAll(r.Body)
+			w.Write([]byte(`{"eid":"i1"}`))
+		default:
+			w.Write([]byte(`{"disk":{"status":{"phase":"Succeeded"}}}`))
+		}
+	}))
+	defer srv.Close()
+	state := bag(client.New(srv.URL, "o", "az", "p", "tok"))
+	state.Put("config", &Config{CPU: 2, Memory: "4Gi", DiskSize: "20Gi", ISOURL: "http://iso", ISODiskSize: "8Gi",
+		CDURL: "http://answers/win.iso", CDDiskSize: "1Gi", VMType: "windows.2k25", DiskBus: "sata"})
+	if (&stepCreate{}).Run(context.Background(), state) != multistep.ActionContinue {
+		t.Fatal("create should continue")
+	}
+	if len(diskURLs) != 3 || !strings.Contains(diskURLs[2], "http://answers/win.iso") || !strings.Contains(diskURLs[2], `"storage":"1"`) {
+		t.Errorf("third disk must import cd_url with a 1 GiB size, got %v", diskURLs)
+	}
+	var got struct {
+		Disks    []struct{ CDROM bool }
+		Advanced *struct{}
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Disks) != 3 || !got.Disks[2].CDROM {
+		t.Errorf("want 3 disks ending with a cdrom, got %+v", got.Disks)
+	}
+	if got.Advanced != nil {
+		t.Error("vm_type alone must not push advanced overrides")
 	}
 }

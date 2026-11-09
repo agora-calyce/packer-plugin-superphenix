@@ -1,0 +1,47 @@
+# Workflow de release, INACTIF tant qu'il reste dans release/ (voir release/README.md).
+# Pour l'activer : le déplacer vers .github/workflows/release.yml, avec release/goreleaser.yml en .goreleaser.yml.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Version d'API du protocole de plugin Packer (ex. x5.0), utilisée dans le nom des binaires.
+      - name: Describe plugin
+        id: plugin_describe
+        run: echo "api_version=$(go run . describe | jq -r '.api_version')" >> "$GITHUB_OUTPUT"
+
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Install packer-sdc (make plugin-check)
+        run: go install github.com/hashicorp/packer-plugin-sdk/cmd/packer-sdc@latest
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          API_VERSION: ${{ steps.plugin_describe.outputs.api_version }}

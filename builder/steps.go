@@ -2,9 +2,12 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
@@ -22,7 +25,7 @@ func fail(state multistep.StateBag, err error) multistep.StepAction {
 
 // stepCreate crée disque(s) et instance. Cleanup les supprime tant que le build n'a pas réussi.
 // Image cloud : un disque `http`. ISO : disque vide + disque ISO en CD-ROM, EFI (voir ci-dessous).
-type stepCreate struct{ id, diskID, isoID string }
+type stepCreate struct{ id, diskID, isoID, cdID string }
 
 func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	c := state.Get("config").(*Config)
@@ -73,8 +76,35 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 		if s.isoID, err = newDisk(client.DiskSource{Type: "http", URL: c.ISOURL}, isoSize); err != nil {
 			return fail(state, err)
 		}
-		state.Put("iso_disk_id", s.isoID)
-		for _, id := range []string{s.diskID, s.isoID} {
+		drop := []string{s.isoID}
+		spec.Disks = []client.Disk{{Order: 0, Bus: c.DiskBus, EID: s.diskID}, {Order: 1, Bus: "sata", CDROM: true, EID: s.isoID}}
+		cdURL, cdSize := c.CDURL, ""
+		if cdURL != "" {
+			cdSize, _ = client.GiB(c.CDDiskSize)
+		} else if cdPath, ok := state.Get("cd_path").(string); ok {
+			// ISO générée (cd_files/cd_content), importée depuis le serveur HTTP de Packer.
+			st, err := os.Stat(cdPath)
+			if err != nil {
+				return fail(state, err)
+			}
+			ip, err := outboundIP(c.APIURL)
+			if err != nil {
+				return fail(state, err)
+			}
+			port, _ := state.Get("http_port").(int)
+			cdURL = fmt.Sprintf("http://%s:%d/%s", ip, port, cdFileName)
+			cdSize = fmt.Sprint(st.Size()/(1<<30) + 1) // Gio entiers, sans unité
+		}
+		if cdURL != "" {
+			ui.Say("Creating CD disk...")
+			if s.cdID, err = newDisk(client.DiskSource{Type: "http", URL: cdURL}, cdSize); err != nil {
+				return fail(state, err)
+			}
+			drop = append(drop, s.cdID)
+			spec.Disks = append(spec.Disks, client.Disk{Order: 2, Bus: "sata", CDROM: true, EID: s.cdID})
+		}
+		state.Put("drop_disks", drop)
+		for _, id := range append([]string{s.diskID}, drop...) {
 			wctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 			err := api.WaitDiskReady(wctx, id, 5*time.Second)
 			cancel()
@@ -82,18 +112,20 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 				return fail(state, err)
 			}
 		}
-		spec.Disks = []client.Disk{{Order: 0, Bus: "virtio", EID: s.diskID}, {Order: 1, Bus: "sata", CDROM: true, EID: s.isoID}}
-		adv := &client.Advanced{}
-		if c.EFI == nil || *c.EFI {
-			// BIOS (SeaBIOS) n'essaie que le disque dur : le CD-ROM n'est amorcé qu'en EFI. Testé : disque vide
-			// d'abord (non amorçable, l'EFI passe au CD), puis le disque installé démarre seul au reboot.
-			adv.Firmware = &client.Firmware{Bootloader: client.Bootloader{EFI: client.EFI{Enabled: true, SecureBoot: c.SecureBoot}}}
-		}
-		if c.TPM {
-			adv.Devices = &client.Devices{TPM: client.TPM{Enabled: true}}
-		}
-		if adv.Firmware != nil || adv.Devices != nil {
-			spec.Advanced = adv
+		// Avec un vm_type (ex. windows.2k25) et aucune option explicite, le type fixe EFI/Secure Boot/TPM.
+		if c.VMType == "" || c.EFI != nil || c.SecureBoot != nil || c.TPM != nil {
+			adv := &client.Advanced{}
+			if c.EFI == nil || *c.EFI {
+				// BIOS (SeaBIOS) n'essaie que le disque dur : le CD-ROM n'est amorcé qu'en EFI. Testé : disque vide
+				// d'abord (non amorçable, l'EFI passe au CD), puis le disque installé démarre seul au reboot.
+				adv.Firmware = &client.Firmware{Bootloader: client.Bootloader{EFI: client.EFI{Enabled: true, SecureBoot: c.SecureBoot != nil && *c.SecureBoot}}}
+			}
+			if c.TPM != nil {
+				adv.Devices = &client.Devices{TPM: client.TPM{Enabled: *c.TPM}}
+			}
+			if adv.Firmware != nil || adv.Devices != nil {
+				spec.Advanced = adv
+			}
 		}
 	}
 	state.Put("disk_id", s.diskID)
@@ -112,7 +144,7 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 }
 
 func (s *stepCreate) Cleanup(state multistep.StateBag) {
-	if s.id == "" && s.diskID == "" && s.isoID == "" {
+	if s.id == "" && s.diskID == "" && s.isoID == "" && s.cdID == "" {
 		return
 	}
 	// Tout sauf un build abouti (flag posé par stepDropISO, dernière étape) supprime les ressources :
@@ -129,7 +161,7 @@ func (s *stepCreate) Cleanup(state multistep.StateBag) {
 			ui.Error("cleanup instance: " + err.Error())
 		}
 	}
-	for _, d := range []string{s.diskID, s.isoID} {
+	for _, d := range []string{s.diskID, s.isoID, s.cdID} {
 		if d == "" {
 			continue
 		}
@@ -253,22 +285,37 @@ func (stepStop) Run(ctx context.Context, state multistep.StateBag) multistep.Ste
 }
 func (stepStop) Cleanup(multistep.StateBag) {}
 
-// stepDropISO détache et supprime le disque ISO une fois la VM arrêtée (il n'appartient pas à l'artefact).
+// stepStageCD expose l'ISO générée (cd_path) dans le dossier servi par le serveur HTTP.
+type stepStageCD struct{ dir string }
+
+const cdFileName = "cd.iso"
+
+func (s *stepStageCD) Run(_ context.Context, state multistep.StateBag) multistep.StepAction {
+	p, ok := state.Get("cd_path").(string)
+	if !ok {
+		return fail(state, errors.New("cd_files/cd_content: no CD was created"))
+	}
+	if err := os.Symlink(p, filepath.Join(s.dir, cdFileName)); err != nil {
+		return fail(state, err)
+	}
+	return multistep.ActionContinue
+}
+func (*stepStageCD) Cleanup(multistep.StateBag) {}
+
+// stepDropISO détache et supprime les disques ISO/CD une fois la VM arrêtée (ils n'appartiennent pas à l'artefact).
 type stepDropISO struct{}
 
 func (stepDropISO) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	id, ok := state.Get("iso_disk_id").(string)
-	if !ok {
-		state.Put("build_ok", true)
-		return multistep.ActionContinue
-	}
+	ids, _ := state.Get("drop_disks").([]string)
 	api := state.Get("client").(*client.Client)
-	state.Get("ui").(packersdk.Ui).Say("Removing ISO disk...")
-	if err := api.UnmountDisk(ctx, id); err != nil {
-		return fail(state, err)
-	}
-	if err := api.DeleteDiskIfExists(ctx, id); err != nil {
-		return fail(state, err)
+	for _, id := range ids {
+		state.Get("ui").(packersdk.Ui).Say("Removing ISO disk " + id + "...")
+		if err := api.UnmountDisk(ctx, id); err != nil {
+			return fail(state, err)
+		}
+		if err := api.DeleteDiskIfExists(ctx, id); err != nil {
+			return fail(state, err)
+		}
 	}
 	state.Put("build_ok", true)
 	return multistep.ActionContinue

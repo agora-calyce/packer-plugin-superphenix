@@ -76,6 +76,9 @@ type FlatConfig struct {
 	HTTPAddress               *string           `mapstructure:"http_bind_address" cty:"http_bind_address" hcl:"http_bind_address"`
 	HTTPInterface             *string           `mapstructure:"http_interface" undocumented:"true" cty:"http_interface" hcl:"http_interface"`
 	HTTPNetworkProtocol       *string           `mapstructure:"http_network_protocol" cty:"http_network_protocol" hcl:"http_network_protocol"`
+	CDFiles                   []string          `mapstructure:"cd_files" cty:"cd_files" hcl:"cd_files"`
+	CDContent                 map[string]string `mapstructure:"cd_content" cty:"cd_content" hcl:"cd_content"`
+	CDLabel                   *string           `mapstructure:"cd_label" cty:"cd_label" hcl:"cd_label"`
 	BootGroupInterval         *string           `mapstructure:"boot_keygroup_interval" cty:"boot_keygroup_interval" hcl:"boot_keygroup_interval"`
 	BootWait                  *string           `mapstructure:"boot_wait" cty:"boot_wait" hcl:"boot_wait"`
 	BootCommand               []string          `mapstructure:"boot_command" cty:"boot_command" hcl:"boot_command"`
@@ -89,6 +92,9 @@ type FlatConfig struct {
 	EFI                       *bool             `mapstructure:"efi" cty:"efi" hcl:"efi"`
 	SecureBoot                *bool             `mapstructure:"secure_boot" cty:"secure_boot" hcl:"secure_boot"`
 	TPM                       *bool             `mapstructure:"tpm" cty:"tpm" hcl:"tpm"`
+	CDURL                     *string           `mapstructure:"cd_url" cty:"cd_url" hcl:"cd_url"`
+	CDDiskSize                *string           `mapstructure:"cd_disk_size" cty:"cd_disk_size" hcl:"cd_disk_size"`
+	DiskBus                   *string           `mapstructure:"disk_bus" cty:"disk_bus" hcl:"disk_bus"`
 	ISODiskSize               *string           `mapstructure:"iso_disk_size" cty:"iso_disk_size" hcl:"iso_disk_size"`
 	CPU                       *int              `mapstructure:"cpu" cty:"cpu" hcl:"cpu"`
 	Memory                    *string           `mapstructure:"memory" cty:"memory" hcl:"memory"`
@@ -177,6 +183,9 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"http_bind_address":            &hcldec.AttrSpec{Name: "http_bind_address", Type: cty.String, Required: false},
 		"http_interface":               &hcldec.AttrSpec{Name: "http_interface", Type: cty.String, Required: false},
 		"http_network_protocol":        &hcldec.AttrSpec{Name: "http_network_protocol", Type: cty.String, Required: false},
+		"cd_files":                     &hcldec.AttrSpec{Name: "cd_files", Type: cty.List(cty.String), Required: false},
+		"cd_content":                   &hcldec.AttrSpec{Name: "cd_content", Type: cty.Map(cty.String), Required: false},
+		"cd_label":                     &hcldec.AttrSpec{Name: "cd_label", Type: cty.String, Required: false},
 		"boot_keygroup_interval":       &hcldec.AttrSpec{Name: "boot_keygroup_interval", Type: cty.String, Required: false},
 		"boot_wait":                    &hcldec.AttrSpec{Name: "boot_wait", Type: cty.String, Required: false},
 		"boot_command":                 &hcldec.AttrSpec{Name: "boot_command", Type: cty.List(cty.String), Required: false},
@@ -190,6 +199,9 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"efi":                          &hcldec.AttrSpec{Name: "efi", Type: cty.Bool, Required: false},
 		"secure_boot":                  &hcldec.AttrSpec{Name: "secure_boot", Type: cty.Bool, Required: false},
 		"tpm":                          &hcldec.AttrSpec{Name: "tpm", Type: cty.Bool, Required: false},
+		"cd_url":                       &hcldec.AttrSpec{Name: "cd_url", Type: cty.String, Required: false},
+		"cd_disk_size":                 &hcldec.AttrSpec{Name: "cd_disk_size", Type: cty.String, Required: false},
+		"disk_bus":                     &hcldec.AttrSpec{Name: "disk_bus", Type: cty.String, Required: false},
 		"iso_disk_size":                &hcldec.AttrSpec{Name: "iso_disk_size", Type: cty.String, Required: false},
 		"cpu":                          &hcldec.AttrSpec{Name: "cpu", Type: cty.Number, Required: false},
 		"memory":                       &hcldec.AttrSpec{Name: "memory", Type: cty.String, Required: false},

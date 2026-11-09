@@ -2,7 +2,7 @@
 
 ## Périmètre
 - Plugin Go (`packer-plugin-sdk`) : **builder** + **post-processor**.
-- Builder : crée la VM depuis une cloud image (`source_url`) ou installe depuis une ISO (`iso_url`), provisionne via SSH. Pas de WinRM, pas de `cd_files`/`floppy` pour l'instant (Windows à venir).
+- Builder : crée la VM depuis une cloud image (`source_url`) ou installe depuis une ISO (`iso_url`), provisionne via SSH (Linux) ou WinRM (Windows). Windows : ISO d'answer file hébergée (`cd_url`), validé avec Server 2025 FR ; `cd_files`/`cd_content` seulement si Superphenix joint le runner ; pas de `floppy`.
 - Post-processor : exporte le disque en qcow2 vers la machine qui lance Packer (variante 3b).
 - Auth : API token (en-tête `Authorization: api-token <token>`, créé dans la console) via variable CI masquée. Client HTTP écrit à la main (pas de SDK Go public).
 - Réseau : le runner joint les **IP privées** des VM (builder et helper d'export). Il doit donc être dans le subnet Superphenix, ou derrière un VPN. L'exposition par EIP n'est pas supportée.
@@ -36,7 +36,7 @@ Testé avec Ubuntu Server 26.04 (2026-11-08).
 - Fichier de réponse : `cloudInit.config` de l'instance (disque `cidata` lu par l'installeur). Évite le serveur HTTP de Packer, que la VM ne joint pas si un groupe de sécurité bloque le runner. `http_content` reste possible.
 - Ubuntu 26.04, GRUB EFI : la ligne `linux /casper/vmlinuz  ---` est la 4e ligne de l'éditeur ; `autoinstall` doit être inséré **avant** `---` (`<end><left><left><left><left>` : il y a un caractère après les tirets). À vérifier par capture à chaque nouvelle release.
 - Le disque ISO est détaché (`unmount`) puis supprimé à la fin du build. Il reste attaché pendant le provisioning.
-- Non testé : l'export d'une VM issue d'une ISO, Secure Boot, TPM, Windows, `cd_files`.
+- Non testé : l'export d'une VM Linux issue d'une ISO, le démarrage d'un qcow2 exporté, Secure Boot et TPM sur Linux, `cd_files` sur un runner joignable par Superphenix.
 
 ## Export qcow2 — variante 3b
 1. `stop` de la VM Packer (le builder), puis attente de l'état `Stopped`.
@@ -47,11 +47,22 @@ Testé avec Ubuntu Server 26.04 (2026-11-08).
 6. Supprimer helper puis disques. Tout est dans des `defer` : exécuté aussi en cas d'échec ou d'annulation (Ctrl-C ferme la connexion SSH et supprime le fichier partiel).
 
 ## Limites connues
-- Testé avec une version de l'API et une AZ (`fr01-als01`) ; la version déployée attend `memory` en entier de Gio, alors que le code récent de `main` attend une quantité (`"4Gi"`) : à suivre à la mise à jour de l'API.
+- Testé avec une version de l'API et une AZ (`fr01-als01`) ; la version déployée attend les tailles (`memory`, `storage`) en entier de Gio sans unité. Le plugin accepte `4Gi` ou `4` et envoie `4` ; le code récent de `main` de l'API attend une quantité (`"4Gi"`) : à suivre à la mise à jour de l'API.
 - Clé hôte SSH du helper non vérifiée (VM éphémère, clé inconnue d'avance).
 - La suppression d'un disque peut renvoyer 500 jusqu'à plusieurs minutes après la suppression de sa VM : le plugin réessaie 10 min.
 - Si `Ctrl-C` ou un crash tue Packer pendant le build, les ressources déjà créées peuvent rester : les labels `user.superphenix.net/created-by:packer*` permettent de les repérer.
 
 ## Pistes
 - Runner hors réseau : exposer la VM par EIP + DNAT + SG, pour le builder comme pour le helper. Demande de lire et de restaurer l'état de l'EIP (SNAT, DNAT existants) ; non fait.
-- Release : goreleaser (binaires `linux/amd64`, `linux/arm64`, checksums) une fois les tests élargis.
+- Release : fichiers préparés mais inactifs dans `release/` (goreleaser, workflows de release et de CI, procédure d'activation dans `release/README.md`) ; à activer une fois les tests élargis. Non testés (ni goreleaser ni GitHub Actions disponibles ici).
+
+## Windows
+
+- L'import d'un disque `http` est fait par un pod de Superphenix qui n'a **aucune route vers l'IP privée du runner** (timeout, aucun SYN côté runner). Une ISO générée par le runner (`cd_files`/`cd_content`) est donc inimportable ; l'ISO d'answer file est statique et hébergée (`cd_url`, `example/windows/answer-iso/make-answer-iso.sh`).
+- Les VMs joignent le runner (groupe de sécurité 10.0.0.0/24 vers `http_port`). Le bootstrap WinRM est téléchargé au premier logon par PowerShell depuis `http_directory`.
+- WinPE de l'ISO Server 2025 FR : Shift+F10 ouvre `X:\sources>` ; ni curl, ni certutil, ni PowerShell ; clavier AZERTY (le VNC envoie des keycodes US) ; ~10 min de chargement (`<wait600s>`).
+- `vm_type = "windows.2k25"` fixe EFI, Secure Boot et TPM : sans `efi`/`secure_boot`/`tpm` explicites, le builder n'envoie pas `advanced`. Disque système en SATA (`disk_bus`), pas de pilote virtio à l'installation.
+- Console VNC : une seule session à la fois.
+- Validé de bout en bout : Server 2025 FR, 36 min 32 s (ISO + `cd_url` d'answer file hébergée sur `iso-host`, WinRM via bootstrap PowerShell, hardening, nettoyage). Export qcow2 d'une VM Windows validé le 2026-11-09 : 43 min 19 s au total, fichier de 12,46 Go (50 GiB virtuels, 11,6 GiB utilisés). Le premier essai avait échoué car `/home` du runner n'avait que 915 Mo libres : le plugin prenait l'erreur d'écriture locale pour un blocage réseau (reprises « stalled » puis `gave up after 20 resumes`). Corrigé : `localWriter` (`transfer.go`) arrête tout de suite sur une erreur d'écriture locale, et `freeBytes` compare l'espace libre à la taille du qcow2 avant le téléchargement (non implémenté sous Windows : contrôle ignoré). Le contrôle se fait après la conversion : la taille du qcow2 n'est connue qu'à ce moment.
+- L'answer file est statique (`example/windows/answer-iso/`, générateur et validateur) ; tout ce qui varie d'un build vient du serveur HTTP du runner. Les IDs de l'infrastructure de test (`iso-host`, EIP, groupes de sécurité) sont dans `docs/test-infrastructure.md`.
+- Guides utilisateur : `docs/windows.md` et `docs/linux.md`.

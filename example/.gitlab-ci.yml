@@ -1,6 +1,6 @@
 # Exemple : build d'une image et export qcow2 en artefact GitLab.
 # Le runner doit joindre les IP privées du subnet Superphenix (runner hébergé dans le subnet, ou VPN) :
-# le builder et l'export se connectent en SSH à l'IP privée des VM.
+# le builder (SSH, ou WinRM pour Windows) et l'export (SSH) se connectent à l'IP privée des VM.
 # Variables CI à définir (Settings > CI/CD > Variables) :
 #   PKR_VAR_token (masquée) · PKR_VAR_api_url · PKR_VAR_org_id · PKR_VAR_az · PKR_VAR_project_id
 #   PKR_VAR_subnet_eid
