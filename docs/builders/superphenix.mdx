@@ -200,7 +200,6 @@ Step-by-step guides in the plugin repository: [Linux](https://github.com/agora-c
 - Windows is validated with Windows Server 2025 (French ISO) only: a full build (ISO install, WinRM,
   provisioning) takes about 37 minutes, about 43 with the qcow2 export. Superphenix imports disks from a URL it can reach, so on a runner with a
   private IP use `cd_url` instead of `cd_files` / `cd_content`. `floppy_*` is not supported.
-- The `superphenix-export` post-processor is validated on a VM built from a cloud image and on a Windows Server
-  2025 VM built from an ISO. It has not been tested on a Linux VM built from an ISO. The exported disk of an ISO
-  build holds an EFI system: boot it with an EFI firmware (booting the exported qcow2 is not tested).
+- The `superphenix-export` post-processor is validated on a VM built from a cloud image and on VMs built from an ISO (Ubuntu Server 26.04,
+  Windows Server 2025). The exported disk of an ISO build holds an EFI system: boot it with an EFI firmware (booting the exported qcow2 is not tested).
 - Sizes (`memory`, `disk_size`, ...) are whole GiB, written `4Gi` or `4`.

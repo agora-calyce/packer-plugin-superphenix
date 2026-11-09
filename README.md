@@ -66,11 +66,15 @@ Reference documentation:
 
 - Sources: cloud image (`source_url`) or ISO (`iso_url`, UEFI, driven by `boot_command` over VNC). Linux ISO
   installs are only tested with Ubuntu Server 26.04 and a `user_data` autoinstall.
-- Windows: validated with Windows Server 2025 (French ISO) only, about 37 minutes (43 with the export). It needs a hosted answer-file
-  ISO (`cd_url`) and WinRM; `cd_files`/`cd_content` only work if Superphenix can reach the runner; no `floppy`.
-- The export post-processor is validated on a VM built from a cloud image and on a Windows Server 2025 VM built
-  from an ISO; not tested on a Linux ISO build. Booting an exported qcow2 is not tested. The Packer machine needs
-  free disk space for the file (about 13 GB for Windows Server 2025).
+- Windows: validated with Windows Server 2025 (French ISO) only, about 37 minutes (43 with the export). It needs
+  a hosted answer-file ISO (`cd_url`) and WinRM; `cd_files`/`cd_content` only work if Superphenix can reach the
+  runner; no `floppy`.
+- The export post-processor is validated on a VM built from a cloud image and on ISO builds (Ubuntu Server
+  26.04, Windows Server 2025). Booting an exported qcow2 is not tested. The Packer machine needs free disk
+  space for the file (6 GB for Ubuntu 26.04, 13 GB for Windows Server 2025); the plugin checks it before the
+  download.
+- Not covered by tests: other Linux distributions, Windows 10/11 and Server 2022, Secure Boot and `tpm` on
+  Linux, other AZs and API versions.
 - The helper's SSH host key is not verified (the helper is ephemeral).
 - The runner must be inside the Superphenix network (see Requirements).
 - Sizes follow the deployed API: `memory`, `disk_size` and the other sizes are whole GiB, written `4Gi` or `4`

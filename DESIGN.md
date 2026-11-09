@@ -36,7 +36,7 @@ Testé avec Ubuntu Server 26.04 (2026-11-08).
 - Fichier de réponse : `cloudInit.config` de l'instance (disque `cidata` lu par l'installeur). Évite le serveur HTTP de Packer, que la VM ne joint pas si un groupe de sécurité bloque le runner. `http_content` reste possible.
 - Ubuntu 26.04, GRUB EFI : la ligne `linux /casper/vmlinuz  ---` est la 4e ligne de l'éditeur ; `autoinstall` doit être inséré **avant** `---` (`<end><left><left><left><left>` : il y a un caractère après les tirets). À vérifier par capture à chaque nouvelle release.
 - Le disque ISO est détaché (`unmount`) puis supprimé à la fin du build. Il reste attaché pendant le provisioning.
-- Non testé : l'export d'une VM Linux issue d'une ISO, le démarrage d'un qcow2 exporté, Secure Boot et TPM sur Linux, `cd_files` sur un runner joignable par Superphenix.
+- Export validé depuis une ISO Ubuntu 26.04 (2026-11-09, 22 min 41 s, qcow2 de 6 Go) et Windows. Un 1er essai le même jour a fini en « Timeout waiting for SSH » (40 min) sans cause trouvée ; le rejeu identique a réussi (non reproduit, probable sensibilité au timing du boot_command). Non testé : le démarrage d'un qcow2 exporté, Secure Boot et TPM sur Linux, `cd_files` sur un runner joignable par Superphenix.
 
 ## Export qcow2 — variante 3b
 1. `stop` de la VM Packer (le builder), puis attente de l'état `Stopped`.

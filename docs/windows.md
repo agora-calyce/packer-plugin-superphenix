@@ -41,6 +41,8 @@ change.
 - A security group lets the build VM reach the runner on the Packer HTTP port: **TCP `http_port_min`
   (for example 8080) into the runner, from the subnet CIDR**. Without it the bootstrap fails and Packer waits
   for WinRM until it times out.
+- Free disk space on the runner for the exported qcow2 (about 13 GB for Windows Server 2025), if you use the
+  export.
 - A Windows ISO that Superphenix can download (`iso_url`).
 - A place to host the answer-file ISO (step 2).
 - `xorriso` and `python3` on the machine that generates the answer-file ISO (`apt install xorriso`).

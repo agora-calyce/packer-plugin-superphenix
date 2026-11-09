@@ -123,7 +123,7 @@ ssh_timeout  = "40m"      # the install itself takes most of this
 ```
 
 Useful options: `iso_disk_size` (whole GiB larger than the ISO, default `8Gi`), `efi` (default true),
-`secure_boot`, `tpm`, `disk_bus`, `vm_type`. A full Ubuntu 26.04 build took about 18 minutes.
+`secure_boot`, `tpm`, `disk_bus`, `vm_type`. A full Ubuntu 26.04 build took about 18 minutes, 23 with the qcow2 export.
 
 ## Export
 
@@ -145,8 +145,9 @@ post-processor "superphenix-export" {
 }
 ```
 
-The export is validated on a VM built from a cloud image, and on a Windows VM built from an ISO. It is not tested
-on a Linux VM built from an ISO: that disk holds an EFI system, so boot the qcow2 with UEFI. The Packer machine
+The export is validated on a VM built from a cloud image, and on VMs built from an ISO (Ubuntu Server 26.04: 6 GB
+qcow2, 23 minutes with the export; Windows Server 2025). A disk built from an ISO holds an EFI system, so boot the
+qcow2 with UEFI. The Packer machine
 needs free disk space for the qcow2 (the size of the used data, for example about 13 GB for Windows Server 2025). The plugin checks it before the download and stops with a clear message if it is not enough.
 
 ## Troubleshooting
@@ -157,7 +158,9 @@ needs free disk space for the qcow2 (the size of the used data, for example abou
 | ISO build stuck at "No bootable device" | The firmware is BIOS: leave `efi` unset (default true). |
 | The installer asks questions | `autoinstall` is missing from the kernel line, or typed after `---`: look at the GRUB screen. |
 | Build SSH timeout | The runner cannot reach the VM's private IP (outside the subnet/VPN), or the answer file did not create the SSH user / enable password SSH. |
+| ISO build: SSH timeout and no installer activity | Look at the VM's console (VNC) before changing anything. The GRUB key sequence of `boot_command` is timing sensitive: one Ubuntu 26.04 run timed out after 40 minutes with no explanation, and the identical run succeeded right after. Retry once, then check the screen. |
 | `ssh to helper <ip>: ...` | Same, for the export helper. |
+| `not enough free space for ...` | The volume of `output_path` cannot hold the qcow2. Free space or point `output_path` to a larger volume. |
 | Helper never gets `qemu-img` | The subnet needs Internet access to the distribution mirrors. |
 | `memory: ...` / `disk_size: ...` error | Whole GiB values like `"4Gi"`. |
 | `401` / `403` from the API | Wrong or expired token, or missing rights on the project. Do not print it while debugging. |

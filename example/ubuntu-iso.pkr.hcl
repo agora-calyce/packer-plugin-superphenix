@@ -87,7 +87,7 @@ build {
     inline = ["cat /etc/os-release | head -2"]
   }
 
-  # Export validé depuis une cloud image et depuis une VM Windows issue d'une ISO ; non testé sur un Linux issu d'une ISO.
+  # Export validé depuis une cloud image et depuis des VM issues d'une ISO (Ubuntu 26.04, Windows).
   post-processor "superphenix-export" {
     api_url          = var.api_url
     org_id           = var.org_id

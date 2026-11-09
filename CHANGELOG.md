@@ -11,7 +11,8 @@
   `iso_url`, passed as is on the instance's cloud-init (answer file for an installer, no network needed).
 - Builder: ISO source (`iso_url`, `iso_disk_size`, `efi`, `secure_boot`, `tpm`): empty disk + ISO CD-ROM, UEFI,
   `boot_command`/`boot_wait` typed over the VNC console (RFB over WebSocket), `http_content`/`http_directory`.
-  The ISO disk is removed at the end of the build. Tested with Ubuntu Server 26.04.
+  The ISO disk is removed at the end of the build. Tested with Ubuntu Server 26.04, including the export
+  (23 minutes, 6 GB qcow2).
 
 ### Fixed
 

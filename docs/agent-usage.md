@@ -178,6 +178,7 @@ Typical durations: image import a few minutes, then provisioning, then conversio
 | `401`/`403` from the API | Token wrong, expired, or lacks rights on the project. Do not print it while debugging. |
 | Export disk not found | Set `disk_device` (for example `/dev/vdb`). |
 | Output file empty/truncated, no space | Increase `helper_disk_size` (it holds the converted qcow2). |
+| `not enough free space for <output_path>` | The Packer machine's volume cannot hold the qcow2 (6 GB for Ubuntu 26.04, 13 GB for Windows Server 2025). Free space or change `output_path`. The plugin checks before the download. |
 
 Failed or cancelled runs delete their resources. If Packer was killed (SIGKILL, runner crash), orphans may
 remain: look for VMs/disks labelled `user.superphenix.net/created-by:packer*` (builder: `packer`, helper:
