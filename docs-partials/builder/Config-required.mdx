@@ -12,9 +12,6 @@
   `Authorization: api-token <token>`. Pass it through a sensitive
   variable (`PKR_VAR_token`) and never write it in the template.
 
-- `source_url` (string) - URL of the cloud image used to create the boot disk (an `Http` disk
-  source). ISO sources are not supported yet.
-
 - `storage_class` (string) - Storage class of the boot disk, for example `block-standard`. The
   available classes are listed by `GET .../{az}/{project_id}/storage-class`.
 

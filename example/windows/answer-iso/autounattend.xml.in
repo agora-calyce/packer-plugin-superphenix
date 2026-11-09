@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+   <settings pass="windowsPE">
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <SetupUILanguage>
+            <UILanguage>@LOCALE@</UILanguage>
+         </SetupUILanguage>
+         <InputLocale>@LOCALE@</InputLocale>
+         <SystemLocale>@LOCALE@</SystemLocale>
+         <UILanguage>@LOCALE@</UILanguage>
+         <UILanguageFallback>@LOCALE@</UILanguageFallback>
+         <UserLocale>@LOCALE@</UserLocale>
+      </component>
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <DiskConfiguration>
+            <Disk wcm:action="add">
+               <DiskID>0</DiskID>
+               <WillWipeDisk>true</WillWipeDisk>
+               <CreatePartitions>
+                  <CreatePartition wcm:action="add">
+                        <Order>1</Order>
+                        <Type>EFI</Type>
+                        <Size>300</Size>
+                  </CreatePartition>
+                  <CreatePartition wcm:action="add">
+                        <Order>2</Order>
+                        <Type>MSR</Type>
+                        <Size>16</Size>
+                  </CreatePartition>
+                  <CreatePartition wcm:action="add">
+                        <Order>3</Order>
+                        <Type>Primary</Type>
+                        <Extend>true</Extend>
+                  </CreatePartition>
+               </CreatePartitions>
+               <ModifyPartitions>
+                  <ModifyPartition wcm:action="add">
+                        <Format>FAT32</Format>
+                        <Label>System</Label>
+                        <Order>1</Order>
+                        <PartitionID>1</PartitionID>
+                  </ModifyPartition>
+                  <ModifyPartition wcm:action="add">
+                        <Order>2</Order>
+                        <PartitionID>2</PartitionID>
+                  </ModifyPartition>
+                  <ModifyPartition wcm:action="add">
+                        <Format>NTFS</Format>
+                        <Label>OS</Label>
+                        <Letter>C</Letter>
+                        <Order>3</Order>
+                        <PartitionID>3</PartitionID>
+                  </ModifyPartition>
+               </ModifyPartitions>
+            </Disk>
+         </DiskConfiguration>
+         <ImageInstall>
+            <OSImage>
+               <InstallFrom>
+                  <MetaData wcm:action="add">
+                     <Key>@IMAGE_KEY@</Key>
+                     <Value>@IMAGE_VALUE@</Value>
+                  </MetaData>
+               </InstallFrom>
+               <InstallTo>
+                  <DiskID>0</DiskID>
+                  <PartitionID>3</PartitionID>
+               </InstallTo>
+            </OSImage>
+         </ImageInstall>
+         <UserData>
+            <AcceptEula>true</AcceptEula>
+            <FullName>@USERNAME@</FullName>
+            <Organization>@USERNAME@</Organization>
+@PRODUCT_KEY_XML@
+         </UserData>
+         <EnableFirewall>false</EnableFirewall>
+      </component>
+   </settings>
+   <settings pass="offlineServicing">
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-LUA-Settings" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <EnableLUA>false</EnableLUA>
+      </component>
+   </settings>
+   <settings pass="generalize">
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-Security-SPP" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <SkipRearm>1</SkipRearm>
+      </component>
+   </settings>
+   <settings pass="specialize">
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <ComputerName>@HOSTNAME@</ComputerName>
+         <OEMInformation>
+            <HelpCustomized>false</HelpCustomized>
+         </OEMInformation>
+         <RegisteredOwner>@USERNAME@</RegisteredOwner>
+         <TimeZone>@TIMEZONE@</TimeZone>
+      </component>
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-ServerManager-SvrMgrNc" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <DoNotOpenServerManagerAtLogon>true</DoNotOpenServerManagerAtLogon>
+      </component>
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-OutOfBoxExperience" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <DoNotOpenInitialConfigurationTasksAtLogon>true</DoNotOpenInitialConfigurationTasksAtLogon>
+      </component>
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-Security-SPP-UX" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <SkipAutoActivation>true</SkipAutoActivation>
+      </component>
+   </settings>
+   <settings pass="oobeSystem">
+      <component xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+         <AutoLogon>
+            <Password>
+               <Value>@PASSWORD@</Value>
+               <PlainText>true</PlainText>
+            </Password>
+            <Enabled>true</Enabled>
+            <Username>@USERNAME@</Username>
+         </AutoLogon>
+         <FirstLogonCommands>
+            <SynchronousCommand wcm:action="add">
+               <CommandLine>%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force; $ok=$false; for($i=0;$i -lt 120 -and -not $ok;$i++){ try { Invoke-Expression ((New-Object Net.WebClient).DownloadString('@BOOTSTRAP_URL@/windows-initialisation.ps1')); $ok=$true } catch { Start-Sleep 5 } }"</CommandLine>
+               <Description>Bootstrap WinRM from the Packer HTTP server</Description>
+               <Order>1</Order>
+               <RequiresUserInput>false</RequiresUserInput>
+            </SynchronousCommand>
+         </FirstLogonCommands>
+         <OOBE>
+            <HideEULAPage>true</HideEULAPage>
+            <HideLocalAccountScreen>true</HideLocalAccountScreen>
+            <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+            <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+            <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+            <NetworkLocation>Work</NetworkLocation>
+            <ProtectYourPC>2</ProtectYourPC>
+         </OOBE>
+         <UserAccounts>
+            <AdministratorPassword>
+               <Value>@PASSWORD@</Value>
+               <PlainText>true</PlainText>
+            </AdministratorPassword>
+            <LocalAccounts>
+               <LocalAccount wcm:action="add">
+                  <Password>
+                     <Value>@PASSWORD@</Value>
+                     <PlainText>true</PlainText>
+                  </Password>
+                  <Group>administrators</Group>
+                  <DisplayName>@USERNAME@</DisplayName>
+                  <Name>@USERNAME@</Name>
+                  <Description>Build Account</Description>
+               </LocalAccount>
+            </LocalAccounts>
+         </UserAccounts>
+      </component>
+   </settings>
+</unattend>

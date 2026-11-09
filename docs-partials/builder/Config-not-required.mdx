@@ -1,15 +1,51 @@
 <!-- Code generated from the comments of the Config struct in builder/builder.go; DO NOT EDIT MANUALLY -->
 
+- `source_url` (string) - URL of the cloud image used to create the boot disk (an `http` disk
+  source). Exactly one of `source_url` and `iso_url` is required.
+
+- `iso_url` (string) - URL of an installation ISO (an `http` disk source that Superphenix
+  downloads itself; local paths and checksums are not supported). The
+  VM boots an empty `disk_size` disk with the ISO as a CD-ROM, so the
+  installer must be driven with `boot_command` and `http_content` /
+  `http_directory`. The ISO is detached and deleted once the build is done.
+
+- `efi` (\*bool) - UEFI firmware for ISO installs. Defaults to `true`: BIOS only tries the
+  hard disk, so the ISO would never boot. Windows needs EFI anyway.
+
+- `secure_boot` (\*bool) - Enable UEFI Secure Boot (ISO installs with EFI). Defaults to `false`,
+  or to what `vm_type` defines when `vm_type` is set and none of `efi`,
+  `secure_boot` and `tpm` is.
+
+- `tpm` (\*bool) - Add a TPM device to the VM (ISO installs). Defaults to `false`, or to
+  what `vm_type` defines (see `secure_boot`).
+
+- `cd_url` (string) - URL of a ready-made ISO (an `http` disk source that Superphenix downloads
+  itself) attached as a second CD-ROM, typically an answer-file ISO
+  (`autounattend.xml`) for Windows. Needs `iso_url`; exclusive with
+  `cd_files` and `cd_content`. Use it when Superphenix cannot reach the
+  Packer machine to import a generated ISO.
+
+- `cd_disk_size` (string) - Size of the `cd_url` disk, larger than the ISO. Defaults to `1Gi`. Whole GiB only, between 1 and 5000: write `1Gi` or `1` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+
+- `disk_bus` (string) - Bus of the system disk of an ISO install: `virtio` (default) or `sata`.
+  Windows has no virtio storage driver during setup, so use `sata` for it.
+
+- `iso_disk_size` (string) - Size of the disk holding the ISO, larger than the ISO. Defaults to `8Gi`. Whole GiB only, between 1 and 5000: write `8Gi` or `8` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+
 - `cpu` (int) - Number of vCPUs. Defaults to `2`.
 
-- `memory` (string) - Amount of memory, a whole number of GiB such as `4Gi`. Defaults to `4Gi`.
+- `memory` (string) - Amount of memory. Defaults to `4Gi`. Whole GiB only, between 1 and 5000: write `4Gi` or `4` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 
-- `disk_size` (string) - Size of the boot disk, a whole number of GiB such as `20Gi`. Defaults to `20Gi`.
+- `disk_size` (string) - Size of the boot disk. Defaults to `20Gi`. Whole GiB only, between 1 and 5000: write `20Gi` or `20` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 
-- `user_data` (string) - Extra cloud-init user-data (`#cloud-config` YAML), for example
-  `file("user-data.yml")`. It is merged with the plugin's own config: `users`
-  and `packages` are appended (the SSH user is always created), other keys
-  override. Other formats (shell script, MIME) are not supported.
+- `user_data` (string) - Cloud-init user-data (`#cloud-config` YAML), for example
+  `file("user-data.yml")`, set on the instance's CloudInit configuration.
+  With `source_url` it is merged with the plugin's own config: `users` and
+  `packages` are appended (the SSH user is always created), other keys
+  override. With `iso_url` it is passed as is, and is the way to give an
+  installer its answer file without any network access from the VM, for
+  example an Ubuntu `autoinstall:` section (keep `autoinstall` on the
+  kernel command line). Other formats (shell script, MIME) are not supported.
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
