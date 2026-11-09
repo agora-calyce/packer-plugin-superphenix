@@ -16,7 +16,7 @@ func fail(state multistep.StateBag, err error) multistep.StepAction {
 	return multistep.ActionHalt
 }
 
-// stepCreate crée l'instance et attend son IP. Cleanup la supprime tant que le build n'a pas réussi.
+// stepCreate creates the instance and waits for its IP. Cleanup deletes it unless the build succeeded.
 type stepCreate struct{ id, diskID string }
 
 func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -35,10 +35,10 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 	spec := client.CreateVMInfo{
 		CloudInit: &client.CloudInit{Custom: true, Bus: "virtio", Config: cloudInit},
 		Compute:   client.Compute{CPU: c.CPU, Memory: mem},
-		Disks:     []client.Disk{{Order: 0, Bus: "virtio", EID: ""}}, // EID renseigné après création du disque
+		Disks:     []client.Disk{{Order: 0, Bus: "virtio", EID: ""}}, // EID filled in after the disk is created
 		General:   client.General{VMType: c.VMType, RunStrategy: "Always", Labels: []string{client.CreatedByLabel("packer")}},
 	}
-	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
+	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network required by the API
 
 	ui.Say("Creating boot disk...")
 	size, err := client.GiB(c.DiskSize)
@@ -83,12 +83,12 @@ func (s *stepCreate) Cleanup(state multistep.StateBag) {
 	_, failed := state.GetOk("error")
 	_, cancelled := state.GetOk(multistep.StateCancelled)
 	if !failed && !cancelled {
-		return // succès : l'artefact garde l'instance pour le post-processor
+		return // success: the artifact keeps the instance for the post-processor
 	}
 	ui := state.Get("ui").(packersdk.Ui)
 	api := state.Get("client").(*client.Client)
 	ui.Say("Deleting instance and disk after failure...")
-	// context.Background : le ctx du build est peut-être déjà annulé.
+	// context.Background: the build ctx may already be cancelled.
 	if s.id != "" {
 		if err := api.DeleteInstance(context.Background(), s.id); err != nil && !client.IsNotFound(err) {
 			ui.Error("cleanup instance: " + err.Error())
@@ -101,7 +101,7 @@ func (s *stepCreate) Cleanup(state multistep.StateBag) {
 	}
 }
 
-// stepStop arrête proprement la VM après provisioning (prérequis de l'export 3b).
+// stepStop cleanly stops the VM after provisioning (prerequisite for the 3b export).
 type stepStop struct{}
 
 func (stepStop) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {

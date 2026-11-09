@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/version"
 )
 
-// Surchargeables à la compilation : -ldflags "-X main.Version=0.1.0 -X main.VersionPrerelease="
+// Overridable at build time: -ldflags "-X main.Version=0.1.0 -X main.VersionPrerelease="
 var (
 	Version           = "0.1.0"
 	VersionPrerelease = "dev"

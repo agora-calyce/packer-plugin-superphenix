@@ -14,7 +14,7 @@ import (
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
-// Faux Superphenix : create -> eid i1 ; get -> Running + IP ; trace des appels.
+// Fake Superphenix: create -> eid i1; get -> Running + IP; call trace.
 func fake(t *testing.T) (*client.Client, *[]string) {
 	var mu sync.Mutex
 	var calls []string
@@ -53,11 +53,11 @@ func TestCreateThenCleanupOnFailure(t *testing.T) {
 	if state.Get("ip") != "10.0.0.5" || state.Get("instance_id") != "i1" {
 		t.Fatalf("bad state: %v %v", state.Get("ip"), state.Get("instance_id"))
 	}
-	st.Cleanup(state) // succès : pas de suppression
+	st.Cleanup(state) // success: no deletion
 	if strings.Contains(strings.Join(*calls, ","), "DELETE") {
 		t.Fatal("must not delete on success")
 	}
-	state.Put("error", context.Canceled) // échec ultérieur
+	state.Put("error", context.Canceled) // later failure
 	st.Cleanup(state)
 	got := strings.Join(*calls, ",")
 	if !strings.HasSuffix(got, "DELETE instance/i1,DELETE disk/d1") {

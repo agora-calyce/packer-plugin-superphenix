@@ -9,7 +9,7 @@ build:
 test:
 	go test -race -count=1 ./...
 
-# Génère les *.hcl2spec.go, docs-partials/ puis .web-docs/ (à commiter).
+# Generates *.hcl2spec.go, docs-partials/ then .web-docs/ (to be committed).
 generate:
 	go generate ./...
 	@if [ -d ".docs" ]; then rm -r ".docs"; fi

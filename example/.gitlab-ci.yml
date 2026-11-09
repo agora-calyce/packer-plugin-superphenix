@@ -1,10 +1,10 @@
-# Exemple : build d'une image et export qcow2 en artefact GitLab.
-# Le runner doit joindre les IP privées du subnet Superphenix (runner hébergé dans le subnet, ou VPN) :
-# le builder et l'export se connectent en SSH à l'IP privée des VM.
-# Variables CI à définir (Settings > CI/CD > Variables) :
-#   PKR_VAR_token (masquée) · PKR_VAR_api_url · PKR_VAR_org_id · PKR_VAR_az · PKR_VAR_project_id
+# Example: build an image and export it as a qcow2 GitLab artifact.
+# The runner must reach the private IPs of the Superphenix subnet (runner hosted in the subnet, or VPN):
+# the builder and the export connect over SSH to the VMs' private IP.
+# CI variables to define (Settings > CI/CD > Variables):
+#   PKR_VAR_token (masked) · PKR_VAR_api_url · PKR_VAR_org_id · PKR_VAR_az · PKR_VAR_project_id
 #   PKR_VAR_subnet_eid
-# Si le dépôt du plugin est privé, `packer init` demande aussi PACKER_GITHUB_API_TOKEN (masquée).
+# If the plugin repository is private, `packer init` also needs PACKER_GITHUB_API_TOKEN (masked).
 stages: [build]
 
 build-image:
@@ -26,7 +26,7 @@ build-image:
     paths: [output/ubuntu.qcow2]
     expire_in: 1 week
   timeout: 1h
-  resource_group: superphenix-packer # un seul build à la fois
+  resource_group: superphenix-packer # one build at a time
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "web"

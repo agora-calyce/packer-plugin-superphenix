@@ -23,17 +23,17 @@ func run(t *testing.T, transferErr error) []string {
 		mu.Unlock()
 		switch {
 		case r.Method == "DELETE" && strings.HasSuffix(r.URL.Path, "/instance/i1"):
-			// la VM Packer a déjà été supprimée par un appel précédent ? non : premier appel OK
+			// was the Packer VM already deleted by a previous call? no: first call OK
 		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/disk/b1"):
 			w.Write([]byte(`{"disk":{"status":{"phase":"Succeeded"}}}`))
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/disk"):
-			w.Write([]byte(`{"eid":"b1"}`)) // disque de boot du helper
+			w.Write([]byte(`{"eid":"b1"}`)) // helper boot disk
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/instance"):
 			w.Write([]byte(`{"eid":"h1"}`))
 		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/instance/h1"):
 			w.Write([]byte(`{"eid":"h1","vmi":{"status":{"phase":"Running","interfaces":[{"ipAddress":"10.0.0.9"}]}}}`))
 		case r.Method == "DELETE" && strings.HasSuffix(r.URL.Path, "/disk/d1"):
-			http.Error(w, "gone", 404) // parti avec le helper : doit être ignoré
+			http.Error(w, "gone", 404) // gone with the helper: must be ignored
 		}
 	}))
 	defer srv.Close()
@@ -57,11 +57,11 @@ func run(t *testing.T, transferErr error) []string {
 }
 
 func TestExportOrderAndCleanup(t *testing.T) {
-	for _, terr := range []error{nil, errors.New("boom")} { // le nettoyage doit être identique dans les deux cas
+	for _, terr := range []error{nil, errors.New("boom")} { // cleanup must be identical in both cases
 		got := strings.Join(run(t, terr), ",")
 		for _, want := range []string{
-			"GET disk/d1/unmount,DELETE instance/i1",                 // détache puis supprime la VM Packer
-			"DELETE instance/h1", "DELETE disk/d1", "DELETE disk/b1", // b1 = boot du helper, supprimé explicitement
+			"GET disk/d1/unmount,DELETE instance/i1",                 // detach then delete the Packer VM
+			"DELETE instance/h1", "DELETE disk/d1", "DELETE disk/b1", // b1 = helper boot disk, deleted explicitly
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("transferErr=%v: missing %q in %s", terr, want, got)

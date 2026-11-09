@@ -19,15 +19,15 @@ type transferFunc func(ctx context.Context, ui packersdk.Ui, host, user string, 
 
 const (
 	remoteOut    = "/var/tmp/out.qcow2"
-	stallTimeout = 60 * time.Second // sans octet reçu pendant ce délai, la connexion est coupée et le transfert repris
+	stallTimeout = 60 * time.Second // no byte received within this delay: the connection is cut and the transfer resumed
 	maxResumes   = 20
 )
 
-// detectDisk liste les disques du helper hors racine, loop, cdrom et cloud-init (label cidata).
+// detectDisk lists the helper's disks excluding root, loop, cdrom and cloud-init (cidata label).
 const detectDisk = `root=$(lsblk -ndo PKNAME "$(findmnt -no SOURCE /)"); for d in $(lsblk -dnpo NAME -e 7,11); do ` +
 	`[ "${d#/dev/}" = "$root" ] && continue; [ "$(sudo blkid -s LABEL -o value $d 2>/dev/null)" = cidata ] && continue; echo $d; done`
 
-// progress note l'instant du dernier octet reçu, pour détecter un transfert figé.
+// progress records the time of the last byte received, to detect a stalled transfer.
 type progress struct {
 	w    io.Writer
 	last atomic.Int64
@@ -38,7 +38,7 @@ func (p *progress) Write(b []byte) (int, error) {
 	return p.w.Write(b)
 }
 
-// pull copie remoteOut à partir de l'offset off vers w. Une connexion figée est fermée par un chien de garde.
+// pull copies remoteOut from offset off to w. A stalled connection is closed by a watchdog.
 func pull(cli *ssh.Client, w io.Writer, off int64) error {
 	s, err := cli.NewSession()
 	if err != nil {
@@ -68,10 +68,10 @@ func pull(cli *ssh.Client, w io.Writer, off int64) error {
 	return s.Run(fmt.Sprintf("tail -c +%d %s", off+1, remoteOut))
 }
 
-// sshFetch : attend cloud-init, convertit dev en qcow2 sur le helper, puis rapatrie le fichier via stdout SSH (avec reprises).
+// sshFetch: waits for cloud-init, converts dev to qcow2 on the helper, then downloads the file through SSH stdout (with resume).
 func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ssh.Signer, dev, out string) (err error) {
 	cfg := &ssh.ClientConfig{User: user, Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, Timeout: 15 * time.Second,
-		// ponytail: pas de vérif de clé hôte (helper éphémère, clé inconnue d'avance), à durcir via console série si besoin.
+		// ponytail: no host key check (ephemeral helper, key unknown in advance), harden via serial console if needed.
 		HostKeyCallback: ssh.InsecureIgnoreHostKey()}
 	connect := func() (*ssh.Client, error) {
 		deadline := time.Now().Add(10 * time.Minute)
@@ -90,8 +90,8 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 	if err != nil {
 		return err
 	}
-	// Ctrl-C : fermer la connexion interrompt sessions et téléchargement en cours.
-	// ponytail: lit cli sans verrou ; une course avec la reconnexion est théorique (au pire, fermeture tardive).
+	// Ctrl-C: closing the connection interrupts ongoing sessions and download.
+	// ponytail: reads cli without a lock; a race with reconnection is theoretical (worst case, late close).
 	stop := context.AfterFunc(ctx, func() { cli.Close() })
 	defer stop()
 	defer func() { cli.Close() }()
@@ -108,12 +108,12 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 		}
 		return o, nil
 	}
-	// cloud-init installe qemu-utils ; --wait bloque jusqu'à la fin.
+	// cloud-init installs qemu-utils; --wait blocks until it finishes.
 	if _, err := run("sudo cloud-init status --wait; command -v qemu-img"); err != nil {
 		return err
 	}
 	if dev == "" {
-		// L'ordre des disques n'est pas garanti : on prend celui qui n'est ni la racine du helper ni le disque cloud-init.
+		// Disk order is not guaranteed: pick the one that is neither the helper's root nor the cloud-init disk.
 		o, err := run(detectDisk)
 		if err != nil {
 			return err
@@ -126,7 +126,7 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 		ui.Say("Exported disk detected: " + dev)
 	}
 	if _, err := run(fmt.Sprintf("sudo qemu-img convert -f raw -O qcow2 %s %s", dev, remoteOut)); err != nil {
-		// Diagnostic : disposition des disques du helper et espace libre (aide à choisir disk_device).
+		// Diagnostic: helper's disk layout and free space (helps choosing disk_device).
 		if o, _ := run("lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINT; df -h /var/tmp"); len(o) > 0 {
 			err = fmt.Errorf("%w\nhelper disks:\n%s", err, o)
 		}
@@ -148,7 +148,7 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 	defer func() {
 		f.Close()
 		if err != nil {
-			os.Remove(out) // pas de qcow2 partiel
+			os.Remove(out) // no partial qcow2
 		}
 	}()
 	var got int64

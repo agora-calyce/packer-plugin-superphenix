@@ -1,46 +1,46 @@
-# Plugin Packer pour Superphenix — design
+# Packer plugin for Superphenix — design
 
-## Périmètre
-- Plugin Go (`packer-plugin-sdk`) : **builder** + **post-processor**.
-- Builder : crée la VM depuis une cloud image (source `http`), provisionne via le communicator SSH. Pas d'ISO, pas de WinRM.
-- Post-processor : exporte le disque en qcow2 vers la machine qui lance Packer (variante 3b).
-- Auth : API token (en-tête `Authorization: api-token <token>`, créé dans la console) via variable CI masquée. Client HTTP écrit à la main (pas de SDK Go public).
-- Réseau : le runner joint les **IP privées** des VM (builder et helper d'export). Il doit donc être dans le subnet Superphenix, ou derrière un VPN. L'exposition par EIP n'est pas supportée.
-- Distribution : GitHub Releases, `packer init` (token `PACKER_GITHUB_API_TOKEN` si le dépôt est privé).
+## Scope
+- Go plugin (`packer-plugin-sdk`): **builder** + **post-processor**.
+- Builder: creates the VM from a cloud image (`http` source), provisions through the SSH communicator. No ISO, no WinRM.
+- Post-processor: exports the disk as qcow2 to the machine running Packer (variant 3b).
+- Auth: API token (header `Authorization: api-token <token>`, created in the console) via a masked CI variable. Hand-written HTTP client (no public Go SDK).
+- Network: the runner reaches the VMs' **private IPs** (builder and export helper). It must therefore sit in the Superphenix subnet, or behind a VPN. Exposure through an EIP is not supported.
+- Distribution: GitHub Releases, `packer init` (`PACKER_GITHUB_API_TOKEN` token if the repository is private).
 
-## API Superphenix utilisée
-Base : `{api_url}/{orgId}/api/spx-ctrl/{az}/{projectId}/...`. Spec : `https://docs.superphenix.net/assets/openapi/superphenix-api.json` (source : `internal/superphenix-api/api/docs.go` dans super-phenix/superphenix).
+## Superphenix API used
+Base: `{api_url}/{orgId}/api/spx-ctrl/{az}/{projectId}/...`. Spec: `https://docs.superphenix.net/assets/openapi/superphenix-api.json` (source: `internal/superphenix-api/api/docs.go` in super-phenix/superphenix).
 
-| Besoin | Endpoint |
+| Need | Endpoint |
 |---|---|
-| Créer un disque | `POST /disk` (`storage` = entier en Gio, `storageClass` obligatoire, `source.type` = `http`) |
-| Attendre l'import | `GET /disk/{id}` → `disk.status.phase == "Succeeded"` |
-| Créer VM / helper | `POST /instance` (`network` obligatoire, `compute.memory` entier en Gio, labels `user.superphenix.net/<clé>:<valeur>`) |
-| IP / état | `GET /instance/{id}` (`vmi.status.interfaces[].ipAddresses`, `vm.status.printableStatus`) |
+| Create a disk | `POST /disk` (`storage` = integer in GiB, `storageClass` required, `source.type` = `http`) |
+| Wait for import | `GET /disk/{id}` → `disk.status.phase == "Succeeded"` |
+| Create VM / helper | `POST /instance` (`network` required, `compute.memory` integer in GiB, labels `user.superphenix.net/<key>:<value>`) |
+| IP / state | `GET /instance/{id}` (`vmi.status.interfaces[].ipAddresses`, `vm.status.printableStatus`) |
 | Stop | `GET /instance/{id}/stop` |
-| Détacher un disque | `GET /disk/{id}/unmount` |
-| Attacher un disque | à la création de la VM seulement : `disks[].eid` |
-| Supprimer | `DELETE /instance/{id}`, `DELETE /disk/{id}` (réessayé tant que le disque est « mounted ») |
+| Detach a disk | `GET /disk/{id}/unmount` |
+| Attach a disk | at VM creation only: `disks[].eid` |
+| Delete | `DELETE /instance/{id}`, `DELETE /disk/{id}` (retried while the disk is "mounted") |
 
-Points à connaître :
-- `cloudInit.custom = true` **remplace** la cloud-init de Superphenix (qui crée l'utilisateur `spx`) : le plugin crée lui-même l'utilisateur SSH avec `sudo` sans mot de passe.
-- Supprimer une VM ne supprime pas ses disques : le plugin les crée à part et les supprime explicitement.
-- La suppression d'une VM est asynchrone : son disque reste « mounted » un moment.
-- Une VM qui démarre avant la fin de l'import de son disque de boot peut démarrer sur un autre disque : on attend `Succeeded`.
+Things to know:
+- `cloudInit.custom = true` **replaces** Superphenix's cloud-init (which creates the `spx` user): the plugin creates the SSH user itself, with passwordless `sudo`.
+- Deleting a VM does not delete its disks: the plugin creates them separately and deletes them explicitly.
+- VM deletion is asynchronous: its disk stays "mounted" for a while.
+- A VM that starts before the import of its boot disk has finished may boot from another disk: the plugin waits for `Succeeded`.
 
-## Export qcow2 — variante 3b
-1. `stop` de la VM Packer (le builder), puis attente de l'état `Stopped`.
-2. `unmount` du disque Packer, puis suppression de la VM Packer (le disque survit).
-3. Créer le disque de boot du helper (cloud image `http`) et attendre son import.
-4. Créer la VM helper : cloud-init (`qemu-utils`, clé SSH éphémère), disque de boot + disque Packer en second volume (`disks[].eid`).
-5. SSH vers l'IP privée du helper : détecter le disque exporté (ni la racine du helper, ni le disque cloud-init, sauf `disk_device`), `qemu-img convert -O qcow2`, puis téléchargement via stdout SSH, avec reprise si le flux se fige 60 s.
-6. Supprimer helper puis disques. Tout est dans des `defer` : exécuté aussi en cas d'échec ou d'annulation (Ctrl-C ferme la connexion SSH et supprime le fichier partiel).
+## qcow2 export — variant 3b
+1. `stop` the Packer VM (the builder's), then wait for the `Stopped` state.
+2. `unmount` the Packer disk, then delete the Packer VM (the disk survives).
+3. Create the helper's boot disk (`http` cloud image) and wait for its import.
+4. Create the helper VM: cloud-init (`qemu-utils`, ephemeral SSH key), boot disk + Packer disk as second volume (`disks[].eid`).
+5. SSH to the helper's private IP: detect the exported disk (neither the helper's root nor the cloud-init disk, unless `disk_device` is set), `qemu-img convert -O qcow2`, then download through SSH stdout, resuming if the stream stalls for 60 s.
+6. Delete the helper, then the disks. Everything is in `defer`s: it also runs on failure or cancellation (Ctrl-C closes the SSH connection and removes the partial file).
 
-## Limites connues
-- Testé avec une version de l'API et une AZ (`fr01-als01`) ; la version déployée attend `memory` en entier de Gio, alors que le code récent de `main` attend une quantité (`"4Gi"`) : à suivre à la mise à jour de l'API.
-- Clé hôte SSH du helper non vérifiée (VM éphémère, clé inconnue d'avance).
-- Si `Ctrl-C` ou un crash tue Packer pendant le build, les ressources déjà créées peuvent rester : les labels `user.superphenix.net/created-by:packer*` permettent de les repérer.
+## Known limits
+- Tested with one API version and one AZ (`fr01-als01`); the deployed version expects `memory` as an integer in GiB, whereas recent `main` code expects a quantity (`"4Gi"`): to follow when the API is updated.
+- The helper's SSH host key is not verified (ephemeral VM, key unknown in advance).
+- If `Ctrl-C` or a crash kills Packer during the build, resources already created may remain: the `user.superphenix.net/created-by:packer*` labels make them easy to find.
 
-## Pistes
-- Runner hors réseau : exposer la VM par EIP + DNAT + SG, pour le builder comme pour le helper. Demande de lire et de restaurer l'état de l'EIP (SNAT, DNAT existants) ; non fait.
-- Release : goreleaser (binaires `linux/amd64`, `linux/arm64`, checksums) une fois les tests élargis.
+## Ideas
+- Runner outside the network: expose the VM through EIP + DNAT + SG, for both the builder and the helper. Requires reading and restoring the EIP state (existing SNAT, DNAT); not done.
+- Release: goreleaser (`linux/amd64`, `linux/arm64` binaries, checksums) once the tests are broader.

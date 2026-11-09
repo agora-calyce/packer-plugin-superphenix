@@ -1,4 +1,4 @@
-// Package client : client HTTP minimal pour l'API Superphenix (stdlib uniquement).
+// Package client: minimal HTTP client for the Superphenix API (stdlib only).
 package client
 
 import (
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Client cible /{orgId}/api/spx-ctrl/{az}/{projectId}/{resource} (proxy superphenix-api).
+// Client targets /{orgId}/api/spx-ctrl/{az}/{projectId}/{resource} (superphenix-api proxy).
 type Client struct {
 	BaseURL, OrgID, AZ, ProjectID, Token string
 	HTTP                                 *http.Client
@@ -24,7 +24,7 @@ func New(baseURL, orgID, az, projectID, token string) *Client {
 		&http.Client{Timeout: 60 * time.Second}}
 }
 
-// Call envoie une requête JSON ; in/out peuvent être nil. Toute réponse non 2xx est une erreur.
+// Call sends a JSON request; in/out may be nil. Any non-2xx response is an error.
 func (c *Client) Call(ctx context.Context, method, resource string, in, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -39,7 +39,7 @@ func (c *Client) Call(ctx context.Context, method, resource string, in, out any)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "api-token "+c.Token) // schéma des API tokens de la console
+	req.Header.Set("Authorization", "api-token "+c.Token) // console API token scheme
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -58,7 +58,7 @@ func (c *Client) Call(ctx context.Context, method, resource string, in, out any)
 	return nil
 }
 
-// StatusError : réponse HTTP non 2xx.
+// StatusError: non-2xx HTTP response.
 type StatusError struct {
 	Code int
 	Msg  string
@@ -66,14 +66,14 @@ type StatusError struct {
 
 func (e *StatusError) Error() string { return e.Msg }
 
-// IsNotFound : vrai pour une 404 (ressource déjà supprimée).
+// IsNotFound: true for a 404 (resource already deleted).
 func IsNotFound(err error) bool {
 	var se *StatusError
 	return errors.As(err, &se) && se.Code == http.StatusNotFound
 }
 
-// Wrappers des opérations utilisées par le flux 3b (voir DESIGN.md).
-// Les corps de requête/réponse suivent vm.CreateVMInfo ; à typer une fois l'env de test dispo.
+// Wrappers for the operations used by the 3b flow (see DESIGN.md).
+// Request/response bodies follow vm.CreateVMInfo; to be typed once the test env is available.
 
 func (c *Client) CreateInstance(ctx context.Context, spec, out any) error {
 	return c.Call(ctx, "POST", "instance", spec, out)

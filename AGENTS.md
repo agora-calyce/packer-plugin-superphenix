@@ -5,7 +5,7 @@ post-processor `superphenix-export` (qcow2 export). Built for CI.
 
 - **Using the plugin in a Packer project** (templates, QEMU migration, troubleshooting): read
   [`docs/agent-usage.md`](docs/agent-usage.md).
-- **Changing the plugin**: read [`DESIGN.md`](DESIGN.md) (API endpoints, export flow, known quirks; in French),
+- **Changing the plugin**: read [`DESIGN.md`](DESIGN.md) (API endpoints, export flow, known quirks),
   then the rules below.
 
 ## Layout
@@ -41,7 +41,7 @@ make plugin-check
   deletion, wait for disk import `Succeeded`). Check them before touching `internal/client` or the flows.
 - Network model: the runner reaches **private IPs** (no EIP). Do not reintroduce public exposure silently.
 - Secrets: the API token is never logged, printed, or put in examples. Examples use variables.
-- Comments in code are in French or English, keep the file's existing language. Prefer the smallest change.
+- Everything is written in English: code comments, docs, tests, commit messages. Prefer the smallest change.
 - Do not call the real Superphenix API, or commit/push, without the user's explicit go-ahead.
 - Tests: unit tests mock the API (`transfer` is injectable in `PostProcessor`). End-to-end runs need a runner
   in the subnet and real credentials.

@@ -80,7 +80,7 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 		c.DiskSize = "20Gi"
 	}
 	if c.Comm.SSHUsername == "" {
-		c.Comm.SSHUsername = "spx" // user cloud-init par défaut de Superphenix
+		c.Comm.SSHUsername = "spx" // Superphenix's default cloud-init user
 	}
 	var errs []error
 	for k, v := range map[string]string{"api_url": c.APIURL, "org_id": c.OrgID, "az": c.AZ,

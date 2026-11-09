@@ -22,7 +22,7 @@ func TestCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := c.StopInstance(context.Background(), "zzz"); err == nil {
-		t.Fatal("erreur attendue sur réponse 400")
+		t.Fatal("error expected on 400 response")
 	}
 }
 
@@ -32,11 +32,11 @@ func TestDeleteDiskIfExists(t *testing.T) {
 	defer srv.Close()
 	c := New(srv.URL, "org", "az1", "proj", "tok")
 	if err := c.DeleteDiskIfExists(context.Background(), "d"); err != nil {
-		t.Fatalf("404 doit être ignoré : %v", err)
+		t.Fatalf("404 must be ignored: %v", err)
 	}
 	code = 500
 	if err := c.DeleteDiskIfExists(context.Background(), "d"); err == nil {
-		t.Fatal("erreur attendue sur 500")
+		t.Fatal("error expected on 500")
 	}
 }
 
@@ -56,12 +56,12 @@ func TestInstanceIP(t *testing.T) {
 func TestGiB(t *testing.T) {
 	for in, want := range map[string]string{"20Gi": "20", "20": "20", "5000Gi": "5000"} {
 		if got, err := GiB(in); err != nil || got != want {
-			t.Fatalf("GiB(%q) = %q, %v ; attendu %q", in, got, err, want)
+			t.Fatalf("GiB(%q) = %q, %v ; want %q", in, got, err, want)
 		}
 	}
 	for _, bad := range []string{"", "20G", "20Mi", "0", "5001Gi", "abc", "1.5Gi"} {
 		if _, err := GiB(bad); err == nil {
-			t.Fatalf("GiB(%q) devrait échouer", bad)
+			t.Fatalf("GiB(%q) should fail", bad)
 		}
 	}
 }
@@ -85,7 +85,7 @@ func TestDeleteDiskRetriesWhileMounted(t *testing.T) {
 	}))
 	defer srv.Close()
 	if err := New(srv.URL, "o", "az", "p", "t").DeleteDiskIfExists(context.Background(), "d"); err != nil || calls != 3 {
-		t.Fatalf("3 appels sans erreur attendus, obtenu %d appels, err=%v", calls, err)
+		t.Fatalf("expected 3 calls without error, got %d calls, err=%v", calls, err)
 	}
 }
 
@@ -98,7 +98,7 @@ func TestWaitDiskReady(t *testing.T) {
 	}))
 	defer srv.Close()
 	if err := New(srv.URL, "o", "az", "p", "t").WaitDiskReady(context.Background(), "d", time.Millisecond); err != nil || n != 2 {
-		t.Fatalf("2 appels attendus sans erreur, obtenu %d, err=%v", n, err)
+		t.Fatalf("expected 2 calls without error, got %d, err=%v", n, err)
 	}
 }
 

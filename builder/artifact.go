@@ -9,7 +9,7 @@ import (
 
 const BuilderID = "agora-calyce.superphenix"
 
-// Artifact : instance arrêtée, prête pour l'export.
+// Artifact: stopped instance, ready for export.
 type Artifact struct {
 	InstanceID string
 	DiskID     string
@@ -22,7 +22,7 @@ func (a *Artifact) Files() []string   { return nil }
 func (a *Artifact) Id() string        { return a.InstanceID }
 func (a *Artifact) String() string    { return fmt.Sprintf("Superphenix instance %s", a.InstanceID) }
 
-// State : lu par le post-processor à travers RPC (le type concret ne survit pas au transport).
+// State: read by the post-processor over RPC (the concrete type does not survive transport).
 func (a *Artifact) State(name string) interface{} {
 	switch name {
 	case "instance_id":
@@ -33,7 +33,7 @@ func (a *Artifact) State(name string) interface{} {
 	return a.StateData[name]
 }
 
-// Destroy supprime VM puis disque ; 404 ignoré (le post-processor a pu déjà tout supprimer).
+// Destroy deletes the VM then the disk; 404 ignored (the post-processor may have already deleted everything).
 func (a *Artifact) Destroy() error {
 	ctx := context.Background()
 	if err := a.Client.DeleteInstance(ctx, a.InstanceID); err != nil && !client.IsNotFound(err) {
