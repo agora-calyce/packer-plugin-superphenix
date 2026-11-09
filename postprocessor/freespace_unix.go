@@ -4,7 +4,7 @@ package postprocessor
 
 import "syscall"
 
-// freeBytes retourne l'espace disponible pour un utilisateur non privilégié dans dir.
+// freeBytes returns the space available to an unprivileged user in dir.
 func freeBytes(dir string) (uint64, error) {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(dir, &st); err != nil {

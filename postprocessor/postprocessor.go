@@ -64,7 +64,7 @@ type Config struct {
 
 type PostProcessor struct {
 	config   Config
-	transfer transferFunc // remplaçable dans les tests
+	transfer transferFunc // replaceable in tests
 }
 
 func (p *PostProcessor) ConfigSpec() hcldec.ObjectSpec { return p.config.FlatMapstructure().HCL2Spec() }
@@ -109,7 +109,7 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 	return errors.Join(errs...)
 }
 
-// FileArtifact : le qcow2 récupéré sur le runner.
+// FileArtifact: the qcow2 retrieved on the runner.
 type FileArtifact struct{ Path string }
 
 func (a *FileArtifact) BuilderId() string        { return builder.BuilderID + ".export" }
@@ -129,7 +129,7 @@ func (p *PostProcessor) PostProcess(ctx context.Context, ui packersdk.Ui, a pack
 		return nil, false, false, errors.New("artifact has no instance_id/disk_id")
 	}
 	c := &p.config
-	// Avant toute ressource créée : échouer ici coûte moins qu'après l'export (déjà long pour un disque Windows).
+	// Before any resource is created: failing here costs less than after the export (already long for a Windows disk).
 	if err := ensureOutputDir(c.OutputPath); err != nil {
 		return nil, false, false, err
 	}
@@ -137,11 +137,11 @@ func (p *PostProcessor) PostProcess(ctx context.Context, ui packersdk.Ui, a pack
 	if err := p.export(ctx, ui, api, instanceID, diskID); err != nil {
 		return nil, false, false, err
 	}
-	// keep=false : l'artefact source (VM supprimée) ne doit pas être conservé.
+	// keep=false: the source artifact (deleted VM) must not be kept.
 	return &FileArtifact{p.config.OutputPath}, false, false, nil
 }
 
-// ensureOutputDir crée le dossier parent de output_path (os.Create ne le fait pas).
+// ensureOutputDir creates output_path's parent folder (os.Create does not).
 func ensureOutputDir(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("output_path: %w", err)
@@ -149,10 +149,10 @@ func ensureOutputDir(path string) error {
 	return nil
 }
 
-// export déroule la variante 3b. Chaque ressource créée est supprimée par defer (succès ou échec).
+// export runs variant 3b. Each created resource is deleted by defer (success or failure).
 func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client.Client, instanceID, diskID string) (err error) {
 	c := &p.config
-	// context.Background pour le nettoyage : ctx peut être annulé.
+	// context.Background for cleanup: ctx may be cancelled.
 	bg := context.Background()
 	cleanup := func(what string, fn func() error) {
 		if e := fn(); e != nil && !client.IsNotFound(e) {
@@ -161,12 +161,12 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 		}
 	}
 
-	// Nettoyage enregistré AVANT toute action : si unmount/suppression échoue, la VM Packer et son disque ne fuient pas.
-	// LIFO : la VM est supprimée avant le disque. 404 ignoré (déjà parti).
+	// Cleanup registered BEFORE any action: if unmount/deletion fails, the Packer VM and its disk do not leak.
+	// LIFO: the VM is deleted before the disk. 404 ignored (already gone).
 	defer cleanup("disk", func() error { return api.DeleteDiskIfExists(bg, diskID) })
 	defer cleanup("packer instance", func() error { return api.DeleteInstance(bg, instanceID) })
 
-	// 1-2. La VM Packer est déjà arrêtée par le builder. On détache le disque, puis on supprime la VM.
+	// 1-2. The Packer VM is already stopped by the builder. Detach the disk, then delete the VM.
 	ui.Say("Detaching disk from the Packer VM...")
 	if err := api.UnmountDisk(ctx, diskID); err != nil {
 		return err
@@ -175,7 +175,7 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 		return err
 	}
 
-	// 3. Helper : clé SSH éphémère, cloud-init (qemu-utils), disque Packer en 2e volume.
+	// 3. Helper: ephemeral SSH key, cloud-init (qemu-utils), Packer disk as 2nd volume.
 	pub, priv, e := ed25519.GenerateKey(rand.Reader)
 	if e != nil {
 		return e
@@ -196,7 +196,7 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 	if e != nil {
 		return e
 	}
-	// Disque de boot du helper créé à part (comme le builder) : supprimer la VM ne supprime pas ses disques.
+	// Helper boot disk created separately (like the builder): deleting the VM does not delete its disks.
 	bootID, e := api.CreateDisk(ctx, client.CreateDiskInfo{General: client.DiskGeneral{
 		Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: helperSize, StorageClass: c.StorageClass}})
 	if e != nil {
@@ -220,7 +220,7 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 		},
 		General: client.General{RunStrategy: "Always", Labels: []string{client.CreatedByLabel(label)}},
 	}
-	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
+	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network required by the API
 	ui.Say("Creating export helper VM...")
 	var helper client.Instance
 	if err := api.CreateInstance(ctx, spec, &helper); err != nil {
@@ -229,7 +229,7 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 	if helper.EID == "" {
 		return errors.New("create helper: response has no eid")
 	}
-	// Supprimer le helper supprime aussi le disque Packer qui lui est attaché (cf. cleanup disk, 404 ignoré).
+	// Deleting the helper also deletes the Packer disk attached to it (see disk cleanup, 404 ignored).
 	defer cleanup("helper", func() error { return api.DeleteInstance(bg, helper.EID) })
 
 	wctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -239,7 +239,7 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 		return err
 	}
 
-	// 4. Conversion + récupération (le runner est dans le réseau : IP privée du helper).
+	// 4. Conversion + download (the runner is in the network: helper's private IP).
 	ui.Say(fmt.Sprintf("Converting and downloading qcow2 from %s...", ip))
 	return p.transfer(ctx, ui, ip, c.HelperUser, signer, c.DiskDevice, c.OutputPath)
 }

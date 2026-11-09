@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Types alignés sur vm.CreateVMInfo / view.Instance (docs.go du controller).
+// Types aligned with vm.CreateVMInfo / view.Instance (controller's docs.go).
 type CreateVMInfo struct {
 	Advanced  *Advanced  `json:"advanced,omitempty"`
 	CloudInit *CloudInit `json:"cloudInit,omitempty"`
@@ -22,7 +22,7 @@ type CreateVMInfo struct {
 	Network   []Network  `json:"network,omitempty"`
 	OrgID     string     `json:"orgID,omitempty"`
 	ProjectID string     `json:"projectID,omitempty"`
-	// ResourceEffectiveID : valeur choisie côté client ? Non confirmé, laissé vide par défaut.
+	// ResourceEffectiveID: value chosen client-side? Unconfirmed, left empty by default.
 	ResourceEffectiveID string `json:"resourceEffectiveID,omitempty"`
 	ResourceLocalID     string `json:"resourceLocalID,omitempty"`
 }
@@ -77,7 +77,7 @@ type DiskGeneral struct {
 	StorageClass string     `json:"storageClass,omitempty"`
 }
 type DiskSource struct {
-	Type string `json:"type"` // "http" ou "blank" (minuscules)
+	Type string `json:"type"` // "http" or "blank" (lowercase)
 	URL  string `json:"url,omitempty"`
 }
 type Network struct {
@@ -106,11 +106,11 @@ type Instance struct {
 	} `json:"vmi"`
 }
 
-// CreatedByLabel : label libre accepté par l'API (préfixe user.superphenix.net/ obligatoire, format clé:valeur).
+// CreatedByLabel: free-form label accepted by the API (user.superphenix.net/ prefix required, key:value format).
 func CreatedByLabel(value string) string { return "user.superphenix.net/created-by:" + value }
 
-// UserCloudInit génère une cloud-init personnalisée : "custom" remplace celle de Superphenix,
-// qui crée l'utilisateur spx. On recrée donc l'utilisateur SSH avec sudo sans mot de passe.
+// UserCloudInit generates a custom cloud-init: "custom" replaces Superphenix's own,
+// which creates the spx user. We therefore recreate the SSH user with passwordless sudo.
 func UserCloudInit(user, authorizedKey string, packages ...string) string {
 	s := "#cloud-config\n"
 	if len(packages) > 0 {
@@ -120,14 +120,14 @@ func UserCloudInit(user, authorizedKey string, packages ...string) string {
 		"    sudo: ['ALL=(ALL) NOPASSWD:ALL']\n    ssh_authorized_keys:\n      - " + strings.TrimSpace(authorizedKey) + "\n"
 }
 
-// GiB convertit "20Gi" ou "20" en "20" : l'API attend un entier en Gio, sans unité (max 5000).
+// GiB converts "20Gi" or "20" to "20": the API expects an integer in GiB, without unit (max 5000).
 func GiB(size string) (string, error) {
 	n, err := GiBInt(size)
 	return strconv.Itoa(n), err
 }
 
-// GiBInt convertit "4Gi" ou "4" en 4. L'API déployée attend compute.memory en entier de Gio
-// (ponytail: les versions plus récentes de l'API attendent une quantité "4Gi", à revoir à la mise à jour).
+// GiBInt converts "4Gi" or "4" to 4. The deployed API expects compute.memory as an integer in GiB
+// (ponytail: newer API versions expect a "4Gi" quantity, to revisit on update).
 func GiBInt(size string) (int, error) {
 	n, err := strconv.Atoi(strings.TrimSuffix(size, "Gi"))
 	if err != nil || n < 1 || n > 5000 {
@@ -136,7 +136,7 @@ func GiBInt(size string) (int, error) {
 	return n, nil
 }
 
-// IP renvoie la première IPv4 connue de l'instance (ipAddresses puis ipAddress), "" sinon.
+// IP returns the instance's first known IPv4 (ipAddresses then ipAddress), "" otherwise.
 func (i *Instance) IP() string {
 	for _, n := range i.VMI.Status.Interfaces {
 		for _, a := range append(n.IPAddresses, n.IPAddress) {
@@ -153,7 +153,7 @@ func (c *Client) GetInstance(ctx context.Context, id string) (*Instance, error) 
 	return &i, c.Call(ctx, "GET", "instance/"+id, nil, &i)
 }
 
-// WaitIP attend que l'instance soit Running avec une IP.
+// WaitIP waits until the instance is Running with an IP.
 func (c *Client) WaitIP(ctx context.Context, id string, every time.Duration) (string, error) {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -179,7 +179,7 @@ type EIDResponse struct {
 	EID string `json:"eid"`
 }
 
-// CreateDisk : POST /disk, la réponse contient l'eid.
+// CreateDisk: POST /disk, the response contains the eid.
 func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, error) {
 	var out EIDResponse
 	if err := c.Call(ctx, "POST", "disk", d, &out); err != nil {
@@ -191,11 +191,11 @@ func (c *Client) CreateDisk(ctx context.Context, d CreateDiskInfo) (string, erro
 	return out.EID, nil
 }
 
-// mountedRetry : délai entre deux essais tant que le disque est encore monté.
+// mountedRetry: delay between two attempts while the disk is still mounted.
 var mountedRetry = 5 * time.Second
 
-// DeleteDiskIfExists ignore les 404 et réessaie (10 min max : la suppression de la VM peut prendre plusieurs minutes à se propager) tant que l'API répond "mounted" ou 5xx :
-// la suppression d'une VM est asynchrone, son disque reste monté un moment.
+// DeleteDiskIfExists ignores 404s and retries (10 min max: VM deletion can take several minutes to propagate) while the API answers "mounted" or 5xx:
+// VM deletion is asynchronous, its disk stays mounted for a while.
 func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
 	deadline := time.Now().Add(10 * time.Minute)
 	for {
@@ -203,7 +203,7 @@ func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
 		if err == nil || IsNotFound(err) {
 			return nil
 		}
-		// "mounted" ou 5xx transitoire (vu juste après la suppression de la VM) : on réessaie.
+		// "mounted" or transient 5xx (seen right after VM deletion): retry.
 		var se *StatusError
 		retry := strings.Contains(err.Error(), "mounted") || (errors.As(err, &se) && se.Code >= 500)
 		if !retry || time.Now().After(deadline) {
@@ -217,8 +217,8 @@ func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
 	}
 }
 
-// WaitDiskReady attend la fin de l'import du disque (phase "Succeeded"). Sans cela, une VM qui démarre
-// avant la fin de l'import ne trouve rien de bootable et peut démarrer sur un autre disque.
+// WaitDiskReady waits for the disk import to finish (phase "Succeeded"). Without it, a VM that starts
+// before the import finishes finds nothing bootable and may boot from another disk.
 func (c *Client) WaitDiskReady(ctx context.Context, id string, every time.Duration) error {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -247,7 +247,7 @@ func (c *Client) WaitDiskReady(ctx context.Context, id string, every time.Durati
 	}
 }
 
-// WaitStopped attend que la VM soit "Stopped" (le endpoint stop rend la main avant l'arrêt effectif).
+// WaitStopped waits until the VM is "Stopped" (the stop endpoint returns before the actual shutdown).
 func (c *Client) WaitStopped(ctx context.Context, id string, every time.Duration) error {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -267,9 +267,9 @@ func (c *Client) WaitStopped(ctx context.Context, id string, every time.Duration
 	}
 }
 
-// MergeUserData fusionne la cloud-config de l'utilisateur dans celle du plugin : `users` et `packages`
-// sont concaténés (l'utilisateur SSH du plugin est toujours créé), les autres clés de l'utilisateur
-// l'emportent. Seul le format `#cloud-config` (YAML) est accepté.
+// MergeUserData merges the user's cloud-config into the plugin's: `users` and `packages`
+// are concatenated (the plugin's SSH user is always created), the user's other keys
+// take precedence. Only the `#cloud-config` (YAML) format is accepted.
 func MergeUserData(base, userData string) (string, error) {
 	if strings.TrimSpace(userData) == "" {
 		return base, nil

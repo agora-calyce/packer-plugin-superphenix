@@ -23,8 +23,8 @@ func fail(state multistep.StateBag, err error) multistep.StepAction {
 	return multistep.ActionHalt
 }
 
-// stepCreate crée disque(s) et instance. Cleanup les supprime tant que le build n'a pas réussi.
-// Image cloud : un disque `http`. ISO : disque vide + disque ISO en CD-ROM, EFI (voir ci-dessous).
+// stepCreate creates disk(s) and instance. Cleanup deletes them unless the build succeeded.
+// Cloud image: one `http` disk. ISO: blank disk + ISO disk as CD-ROM, EFI (see below).
 type stepCreate struct{ id, diskID, isoID, cdID string }
 
 func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -40,7 +40,7 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 		Compute: client.Compute{CPU: c.CPU, Memory: mem},
 		General: client.General{VMType: c.VMType, RunStrategy: "Always", Labels: []string{client.CreatedByLabel("packer")}},
 	}
-	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network requis par l'API
+	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network required by the API
 
 	size, err := client.GiB(c.DiskSize)
 	if err != nil {
@@ -64,8 +64,8 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 		spec.Disks = []client.Disk{{Order: 0, Bus: "virtio", EID: s.diskID}}
 	} else {
 		if c.UserData != "" {
-			// Disque cloud-init de l'instance : lu par l'installeur (ex. autoinstall Ubuntu), sans réseau.
-			// Le contenu est passé tel quel (pas de fusion : l'installeur définit lui-même ses utilisateurs).
+			// Instance cloud-init disk: read by the installer (e.g. Ubuntu autoinstall), no network needed.
+			// The content is passed as is (no merge: the installer defines its own users).
 			spec.CloudInit = &client.CloudInit{Custom: true, Bus: "virtio", Config: c.UserData}
 		}
 		ui.Say("Creating empty disk and ISO disk...")
@@ -82,7 +82,7 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 		if cdURL != "" {
 			cdSize, _ = client.GiB(c.CDDiskSize)
 		} else if cdPath, ok := state.Get("cd_path").(string); ok {
-			// ISO générée (cd_files/cd_content), importée depuis le serveur HTTP de Packer.
+			// Generated ISO (cd_files/cd_content), imported from Packer's HTTP server.
 			st, err := os.Stat(cdPath)
 			if err != nil {
 				return fail(state, err)
@@ -93,7 +93,7 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 			}
 			port, _ := state.Get("http_port").(int)
 			cdURL = fmt.Sprintf("http://%s:%d/%s", ip, port, cdFileName)
-			cdSize = fmt.Sprint(st.Size()/(1<<30) + 1) // Gio entiers, sans unité
+			cdSize = fmt.Sprint(st.Size()/(1<<30) + 1) // whole GiB, no unit
 		}
 		if cdURL != "" {
 			ui.Say("Creating CD disk...")
@@ -112,12 +112,12 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 				return fail(state, err)
 			}
 		}
-		// Avec un vm_type (ex. windows.2k25) et aucune option explicite, le type fixe EFI/Secure Boot/TPM.
+		// With a vm_type (e.g. windows.2k25) and no explicit option, the type sets EFI/Secure Boot/TPM.
 		if c.VMType == "" || c.EFI != nil || c.SecureBoot != nil || c.TPM != nil {
 			adv := &client.Advanced{}
 			if c.EFI == nil || *c.EFI {
-				// BIOS (SeaBIOS) n'essaie que le disque dur : le CD-ROM n'est amorcé qu'en EFI. Testé : disque vide
-				// d'abord (non amorçable, l'EFI passe au CD), puis le disque installé démarre seul au reboot.
+				// BIOS (SeaBIOS) only tries the hard disk: the CD-ROM is only booted with EFI. Tested: empty disk
+				// first (not bootable, EFI falls through to the CD), then the installed disk boots on its own after reboot.
 				adv.Firmware = &client.Firmware{Bootloader: client.Bootloader{EFI: client.EFI{Enabled: true, SecureBoot: c.SecureBoot != nil && *c.SecureBoot}}}
 			}
 			if c.TPM != nil {
@@ -147,15 +147,15 @@ func (s *stepCreate) Cleanup(state multistep.StateBag) {
 	if s.id == "" && s.diskID == "" && s.isoID == "" && s.cdID == "" {
 		return
 	}
-	// Tout sauf un build abouti (flag posé par stepDropISO, dernière étape) supprime les ressources :
-	// ne pas se fier à StateCancelled, posé en asynchrone par le runner et parfois pas encore visible ici.
+	// Anything but a completed build (flag set by stepDropISO, the last step) deletes the resources:
+	// do not rely on StateCancelled, set asynchronously by the runner and sometimes not yet visible here.
 	if _, ok := state.GetOk("build_ok"); ok {
-		return // succès : l'artefact garde l'instance pour le post-processor
+		return // success: the artifact keeps the instance for the post-processor
 	}
 	ui := state.Get("ui").(packersdk.Ui)
 	api := state.Get("client").(*client.Client)
 	ui.Say("Deleting instance and disks after failure...")
-	// context.Background : le ctx du build est peut-être déjà annulé.
+	// context.Background: the build ctx may already be cancelled.
 	if s.id != "" {
 		if err := api.DeleteInstance(context.Background(), s.id); err != nil && !client.IsNotFound(err) {
 			ui.Error("cleanup instance: " + err.Error())
@@ -171,7 +171,7 @@ func (s *stepCreate) Cleanup(state multistep.StateBag) {
 	}
 }
 
-// stepBootCommand tape boot_command sur la console VNC après boot_wait (installeur ISO seulement).
+// stepBootCommand types boot_command on the VNC console after boot_wait (ISO installer only).
 type stepBootCommand struct{}
 
 func (stepBootCommand) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -229,8 +229,8 @@ func (stepBootCommand) Run(ctx context.Context, state multistep.StateBag) multis
 }
 func (stepBootCommand) Cleanup(multistep.StateBag) {}
 
-// outboundIP : adresse locale utilisée pour joindre l'API, donc dans le subnet quand le runner y est.
-// ponytail: suppose que la VM joint le runner par la même interface que l'API ; une option http_ip si besoin.
+// outboundIP: local address used to reach the API, hence inside the subnet when the runner is in it.
+// ponytail: assumes the VM reaches the runner through the same interface as the API; add an http_ip option if needed.
 func outboundIP(apiURL string) (string, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
@@ -251,7 +251,7 @@ func outboundIP(apiURL string) (string, error) {
 	return conn.LocalAddr().(*net.UDPAddr).IP.String(), nil
 }
 
-// stepWaitIP attend que l'instance soit Running avec une IP (installeur ou système démarré).
+// stepWaitIP waits until the instance is Running with an IP (installer or booted system).
 type stepWaitIP struct{}
 
 func (stepWaitIP) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -267,7 +267,7 @@ func (stepWaitIP) Run(ctx context.Context, state multistep.StateBag) multistep.S
 }
 func (stepWaitIP) Cleanup(multistep.StateBag) {}
 
-// stepStop arrête proprement la VM après provisioning (prérequis de l'export 3b).
+// stepStop cleanly stops the VM after provisioning (prerequisite for the 3b export).
 type stepStop struct{}
 
 func (stepStop) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -285,7 +285,7 @@ func (stepStop) Run(ctx context.Context, state multistep.StateBag) multistep.Ste
 }
 func (stepStop) Cleanup(multistep.StateBag) {}
 
-// stepStageCD expose l'ISO générée (cd_path) dans le dossier servi par le serveur HTTP.
+// stepStageCD exposes the generated ISO (cd_path) in the folder served by the HTTP server.
 type stepStageCD struct{ dir string }
 
 const cdFileName = "cd.iso"
@@ -302,7 +302,7 @@ func (s *stepStageCD) Run(_ context.Context, state multistep.StateBag) multistep
 }
 func (*stepStageCD) Cleanup(multistep.StateBag) {}
 
-// stepDropISO détache et supprime les disques ISO/CD une fois la VM arrêtée (ils n'appartiennent pas à l'artefact).
+// stepDropISO detaches and deletes the ISO/CD disks once the VM is stopped (they are not part of the artifact).
 type stepDropISO struct{}
 
 func (stepDropISO) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {

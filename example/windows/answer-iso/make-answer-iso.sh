@@ -1,11 +1,11 @@
 #!/bin/sh
-# Génère l'ISO d'answer file (autounattend.xml) à héberger, puis à passer en `cd_url` du builder.
+# Generates the answer-file ISO (autounattend.xml) to host, then pass as the builder's `cd_url`.
 # Usage : PASSWORD=... BOOTSTRAP_URL=http://RUNNER_IP:8080 ./make-answer-iso.sh out.iso
-# Variables : LOCALE (fr-FR), USERNAME (Administrateur), PASSWORD (obligatoire, jetable : à reprendre dans winrm_password),
-#   HOSTNAME (windows-build), TIMEZONE (Romance Standard Time), IMAGE_KEY (/IMAGE/NAME ou /IMAGE/INDEX),
-#   IMAGE_VALUE (Windows Server 2025 SERVERSTANDARD), PRODUCT_KEY (vide = aucune clé),
-#   BOOTSTRAP_URL (obligatoire : serveur HTTP de Packer, ex. http://RUNNER_IP:8080, = http_port_min du template).
-# Nécessite xorriso et python3.
+# Variables: LOCALE (fr-FR), USERNAME (Administrateur), PASSWORD (required, throwaway: reuse it in winrm_password),
+#   HOSTNAME (windows-build), TIMEZONE (Romance Standard Time), IMAGE_KEY (/IMAGE/NAME or /IMAGE/INDEX),
+#   IMAGE_VALUE (Windows Server 2025 SERVERSTANDARD), PRODUCT_KEY (empty = no key),
+#   BOOTSTRAP_URL (required: Packer's HTTP server, e.g. http://RUNNER_IP:8080, = the template's http_port_min).
+# Requires xorriso and python3.
 set -eu
 out=${1:?usage: make-answer-iso.sh out.iso}
 here=$(cd "$(dirname "$0")" && pwd)

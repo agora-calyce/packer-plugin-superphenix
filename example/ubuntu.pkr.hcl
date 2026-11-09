@@ -13,7 +13,7 @@ variable "az"         { type = string }
 variable "project_id" { type = string }
 variable "token" {
   type      = string
-  sensitive = true # injecté par la variable CI masquée PKR_VAR_token
+  sensitive = true # injected by the masked CI variable PKR_VAR_token
 }
 variable "subnet_eid"  { type = string }
 

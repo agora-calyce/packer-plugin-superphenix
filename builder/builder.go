@@ -130,7 +130,7 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 		c.ISODiskSize = "8Gi"
 	}
 	if c.Comm.SSHUsername == "" && c.Comm.Type != "winrm" {
-		c.Comm.SSHUsername = "spx" // user cloud-init par défaut de Superphenix
+		c.Comm.SSHUsername = "spx" // Superphenix's default cloud-init user
 	}
 	var errs []error
 	for k, v := range map[string]string{"api_url": c.APIURL, "org_id": c.OrgID, "az": c.AZ,
@@ -191,7 +191,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		steps = append(steps, &communicator.StepSSHKeyGen{CommConf: &c.Comm, SSHTemporaryKeyPair: c.Comm.SSHTemporaryKeyPair})
 	}
 	if c.hasCD() {
-		// L'ISO générée est servie par le serveur HTTP de Packer dans un dossier temporaire, puis importée par Superphenix.
+		// The generated ISO is served by Packer's HTTP server from a temporary folder, then imported by Superphenix.
 		dir, err := os.MkdirTemp("", "packer-spx-cd-")
 		if err != nil {
 			return nil, err

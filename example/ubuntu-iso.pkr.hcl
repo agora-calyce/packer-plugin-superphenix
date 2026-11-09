@@ -1,5 +1,5 @@
-# Installation d'Ubuntu Server depuis l'ISO (autoinstall via cloud-init), puis export qcow2.
-# Testé avec ubuntu-26.04-live-server-amd64.iso : voir docs/builders/superphenix.mdx.
+# Install Ubuntu Server from the ISO (autoinstall via cloud-init), then export to qcow2.
+# Tested with ubuntu-26.04-live-server-amd64.iso: see docs/builders/superphenix.mdx.
 packer {
   required_plugins {
     superphenix = {
@@ -45,7 +45,7 @@ source "superphenix" "ubuntu-iso" {
   memory    = "4Gi"
   disk_size = "20Gi"
 
-  # Réponse de l'installeur, lue sur le disque cloud-init de l'instance (aucun accès réseau nécessaire).
+  # Installer answer, read from the instance's cloud-init disk (no network access needed).
   user_data = <<-EOT
     #cloud-config
     autoinstall:
@@ -69,7 +69,7 @@ source "superphenix" "ubuntu-iso" {
   boot_wait = "2s"
   boot_command = [
     "<spacebar><wait><spacebar><wait><spacebar><wait>",
-    "e<wait><down><down><down><end><left><left><left><left>", # avant le --- de la ligne linux
+    "e<wait><down><down><down><end><left><left><left><left>", # before the --- of the linux line
     "autoinstall ",
     "<wait><f10>",
   ]
@@ -87,7 +87,7 @@ build {
     inline = ["cat /etc/os-release | head -2"]
   }
 
-  # Export validé depuis une cloud image et depuis des VM issues d'une ISO (Ubuntu 26.04, Windows).
+  # Export validated from a cloud image and from ISO-based VMs (Ubuntu 26.04, Windows).
   post-processor "superphenix-export" {
     api_url          = var.api_url
     org_id           = var.org_id

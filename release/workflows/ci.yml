@@ -1,5 +1,5 @@
-# Intégration continue, INACTIVE tant qu'elle reste dans release/ (voir release/README.md).
-# Pour l'activer : la déplacer vers .github/workflows/ci.yml.
+# Continuous integration, INACTIVE while it stays in release/ (see release/README.md).
+# To enable it: move it to .github/workflows/ci.yml.
 name: ci
 
 on:
@@ -21,7 +21,7 @@ jobs:
       - run: go vet ./...
       - run: make test
       - run: make plugin-check
-      # Les fichiers générés et .web-docs/ doivent être à jour.
+      # Generated files and .web-docs/ must be up to date.
       - name: Generated files are up to date
         run: |
           make generate

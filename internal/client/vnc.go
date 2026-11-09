@@ -13,14 +13,14 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-// VNC : client RFB minimal (clavier seulement) sur le WebSocket `instance/{id}/vnc`.
-// ponytail: sécurité RFB "None" uniquement (celle du proxy Superphenix) ; pas d'écran, pas de souris.
+// VNC: minimal RFB client (keyboard only) over the `instance/{id}/vnc` WebSocket.
+// ponytail: RFB "None" security only (the Superphenix proxy's); no screen, no mouse.
 type VNC struct {
 	ws   *websocket.Conn
 	done chan struct{}
 }
 
-// DialVNC ouvre la console VNC de l'instance et fait la poignée de main RFB 3.8.
+// DialVNC opens the instance's VNC console and performs the RFB 3.8 handshake.
 func (c *Client) DialVNC(ctx context.Context, id string) (*VNC, error) {
 	u, err := url.Parse(fmt.Sprintf("%s/%s/api/spx-ctrl/%s/%s/instance/%s/vnc", c.BaseURL, c.OrgID, c.AZ, c.ProjectID, id))
 	if err != nil {
@@ -85,7 +85,7 @@ func (v *VNC) handshake() error {
 	if _, err := v.ws.Write([]byte{1}); err != nil { // ClientInit : shared
 		return err
 	}
-	init := make([]byte, 24) // ServerInit : taille, format pixel, longueur du nom
+	init := make([]byte, 24) // ServerInit: size, pixel format, name length
 	if _, err := io.ReadFull(v.ws, init); err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func (v *VNC) handshake() error {
 	return err
 }
 
-// KeyEvent envoie un appui (down) ou relâchement de touche (keysym X11).
+// KeyEvent sends a key press (down) or release (X11 keysym).
 func (v *VNC) KeyEvent(key uint32, down bool) error {
 	m := []byte{4, 0, 0, 0, 0, 0, 0, 0}
 	if down {
@@ -104,11 +104,11 @@ func (v *VNC) KeyEvent(key uint32, down bool) error {
 	return err
 }
 
-// keepAlive : le proxy coupe la session après ~1 min sans trafic (attentes longues d'un boot_command, ex. Windows).
-// On vide les messages du serveur et on redemande une mise à jour d'1 pixel toutes les 10 s.
+// keepAlive: the proxy drops the session after ~1 min without traffic (long boot_command waits, e.g. Windows).
+// Drain the server's messages and request a 1-pixel update every 10 s.
 func (v *VNC) keepAlive() {
 	go io.Copy(io.Discard, v.ws)
-	req := []byte{3, 1, 0, 0, 0, 0, 0, 1, 0, 1} // FramebufferUpdateRequest incrémentale 1x1
+	req := []byte{3, 1, 0, 0, 0, 0, 0, 1, 0, 1} // incremental 1x1 FramebufferUpdateRequest
 	for t := time.NewTicker(10 * time.Second); ; {
 		select {
 		case <-v.done:

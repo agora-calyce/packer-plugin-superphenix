@@ -16,7 +16,7 @@ import (
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
-// Faux Superphenix : create -> eid i1 ; get -> Running + IP ; trace des appels.
+// Fake Superphenix: create -> eid i1; get -> Running + IP; call trace.
 func fake(t *testing.T) (*client.Client, *[]string) {
 	var mu sync.Mutex
 	var calls []string
@@ -57,11 +57,11 @@ func TestCreateThenCleanupOnFailure(t *testing.T) {
 		t.Fatalf("bad state: %v %v", state.Get("ip"), state.Get("instance_id"))
 	}
 	state.Put("build_ok", true)
-	st.Cleanup(state) // succès : pas de suppression
+	st.Cleanup(state) // success: no deletion
 	if strings.Contains(strings.Join(*calls, ","), "DELETE") {
 		t.Fatal("must not delete on success")
 	}
-	state = bag(api) // build non abouti (pas de build_ok), même sans error ni StateCancelled
+	state = bag(api) // build did not complete (no build_ok), even without error or StateCancelled
 	st.Cleanup(state)
 	got := strings.Join(*calls, ",")
 	if !strings.HasSuffix(got, "DELETE instance/i1,DELETE disk/d1") {
@@ -85,7 +85,7 @@ func TestISOCreateBody(t *testing.T) {
 		case r.Method == "POST":
 			body, _ = io.ReadAll(r.Body)
 			w.Write([]byte(`{"eid":"i1"}`))
-		default: // GET disk : import terminé
+		default: // GET disk: import finished
 			w.Write([]byte(`{"disk":{"status":{"phase":"Succeeded"}}}`))
 		}
 	}))
