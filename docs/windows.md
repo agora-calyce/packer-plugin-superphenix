@@ -121,6 +121,9 @@ to start from is [`example/windows/answer-iso/autounattend.example.xml`](../exam
    must reach `http_port_min` on the runner), or put the script on your ISO and run it from the CD at first
    logon, in which case Packer's HTTP server is not needed. `example/windows/scripts/windows-initialisation.ps1`
    is a working script.
+   This setting must not reach the image: `example/windows/scripts/windows-cleanup.ps1` registers a one-shot
+   startup task that turns unencrypted Basic authentication off at the first boot of a deployed VM (doing it
+   during the build would cut Packer's own session). Keep it as the last provisioner.
 5. Run `validate-answer-iso.py` on it, host it where Superphenix can download it (step 2), and set
    `cd_url` to that link. `iso_url` stays the Windows ISO. Raise `cd_disk_size` (default `1Gi`) only if your ISO
    is larger than 1 GiB.

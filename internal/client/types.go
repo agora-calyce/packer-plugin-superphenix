@@ -168,24 +168,49 @@ func (c *Client) GetInstance(ctx context.Context, id string) (*Instance, error) 
 	return &i, c.Call(ctx, "GET", "instance/"+id, nil, &i)
 }
 
-// WaitIP waits until the instance is Running with an IP.
-func (c *Client) WaitIP(ctx context.Context, id string, every time.Duration) (string, error) {
+// poll calls check every `every` until it reports done, fails for good, or ctx ends. Transient API errors
+// (5xx, network, per-request timeout) are retried until the deadline: one bad answer must not fail, and
+// therefore delete, a build that has been running for half an hour.
+func poll(ctx context.Context, every time.Duration, what string, check func() (bool, error)) error {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
-		i, err := c.GetInstance(ctx, id)
-		if err != nil {
-			return "", err
+		done, err := check()
+		if err != nil && !transient(err) {
+			return err
 		}
-		if i.VMI.Status.Phase == "Running" && i.IP() != "" {
-			return i.IP(), nil
+		if done {
+			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return "", errors.Join(ctx.Err(), errors.New("waiting for instance IP"))
+			return errors.Join(ctx.Err(), errors.New("waiting for "+what), err)
 		case <-t.C:
 		}
 	}
+}
+
+// transient: a 5xx answer or a network-level failure (refused, reset, timeout), worth another try.
+func transient(err error) bool {
+	var se *StatusError
+	if errors.As(err, &se) {
+		return se.Code >= 500
+	}
+	var ne net.Error
+	return errors.As(err, &ne)
+}
+
+// WaitIP waits until the instance is Running with an IP.
+func (c *Client) WaitIP(ctx context.Context, id string, every time.Duration) (ip string, err error) {
+	err = poll(ctx, every, "instance IP", func() (bool, error) {
+		i, err := c.GetInstance(ctx, id)
+		if err != nil {
+			return false, err
+		}
+		ip = i.IP()
+		return i.VMI.Status.Phase == "Running" && ip != "", nil
+	})
+	return ip, err
 }
 
 // --- Disque ---
@@ -235,9 +260,7 @@ func (c *Client) DeleteDiskIfExists(ctx context.Context, id string) error {
 // WaitDiskReady waits for the disk import to finish (phase "Succeeded"). Without it, a VM that starts
 // before the import finishes finds nothing bootable and may boot from another disk.
 func (c *Client) WaitDiskReady(ctx context.Context, id string, every time.Duration) error {
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
+	return poll(ctx, every, "disk import", func() (bool, error) {
 		var d struct {
 			Disk struct {
 				Status struct {
@@ -246,40 +269,21 @@ func (c *Client) WaitDiskReady(ctx context.Context, id string, every time.Durati
 			} `json:"disk"`
 		}
 		if err := c.Call(ctx, "GET", "disk/"+id, nil, &d); err != nil {
-			return err
+			return false, err
 		}
-		switch d.Disk.Status.Phase {
-		case "Succeeded":
-			return nil
-		case "Failed":
-			return errors.New("disk " + id + ": import failed")
+		if d.Disk.Status.Phase == "Failed" {
+			return false, errors.New("disk " + id + ": import failed")
 		}
-		select {
-		case <-ctx.Done():
-			return errors.Join(ctx.Err(), errors.New("waiting for disk import"))
-		case <-t.C:
-		}
-	}
+		return d.Disk.Status.Phase == "Succeeded", nil
+	})
 }
 
 // WaitStopped waits until the VM is "Stopped" (the stop endpoint returns before the actual shutdown).
 func (c *Client) WaitStopped(ctx context.Context, id string, every time.Duration) error {
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
+	return poll(ctx, every, "instance to stop", func() (bool, error) {
 		i, err := c.GetInstance(ctx, id)
-		if err != nil {
-			return err
-		}
-		if i.VM.Status.PrintableStatus == "Stopped" {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return errors.Join(ctx.Err(), errors.New("waiting for instance to stop"))
-		case <-t.C:
-		}
-	}
+		return err == nil && i.VM.Status.PrintableStatus == "Stopped", err
+	})
 }
 
 // MergeUserData merges the user's cloud-config into the plugin's: `users` and `packages`

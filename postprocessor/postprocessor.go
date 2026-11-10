@@ -6,10 +6,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/agora-calyce/packer-plugin-superphenix/builder"
@@ -196,9 +198,14 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 	if e != nil {
 		return e
 	}
+	hostKeyYAML, hostKey, e := helperHostKey()
+	if e != nil {
+		return e
+	}
+	labels := []string{client.CreatedByLabel(fmt.Sprintf("packer-helper-%d", time.Now().Unix()))}
 	// Helper boot disk created separately (like the builder): deleting the VM does not delete its disks.
 	bootID, e := api.CreateDisk(ctx, client.CreateDiskInfo{General: client.DiskGeneral{
-		Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: helperSize, StorageClass: c.StorageClass}})
+		Source: client.DiskSource{Type: "http", URL: c.HelperImageURL}, Storage: helperSize, StorageClass: c.StorageClass, Labels: labels}})
 	if e != nil {
 		return e
 	}
@@ -209,16 +216,15 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 	if e := api.WaitDiskReady(ictx, bootID, 5*time.Second); e != nil {
 		return e
 	}
-	label := fmt.Sprintf("packer-helper-%d", time.Now().Unix())
 	spec := client.CreateVMInfo{
 		CloudInit: &client.CloudInit{Custom: true, Bus: "virtio",
-			Config: client.UserCloudInit(c.HelperUser, string(ssh.MarshalAuthorizedKey(sshPub)), "qemu-utils")},
+			Config: client.UserCloudInit(c.HelperUser, string(ssh.MarshalAuthorizedKey(sshPub)), "qemu-utils") + hostKeyYAML},
 		Compute: client.Compute{CPU: c.HelperCPU, Memory: helperMem},
 		Disks: []client.Disk{
 			{Order: 0, Bus: "virtio", EID: bootID},
 			{Order: 1, Bus: "virtio", EID: diskID},
 		},
-		General: client.General{RunStrategy: "Always", Labels: []string{client.CreatedByLabel(label)}},
+		General: client.General{RunStrategy: "Always", Labels: labels},
 	}
 	spec.Network = []client.Network{{Enabled: true, Order: 0, SubnetEID: c.SubnetEID}} // network required by the API
 	ui.Say("Creating export helper VM...")
@@ -241,5 +247,23 @@ func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client
 
 	// 4. Conversion + download (the runner is in the network: helper's private IP).
 	ui.Say(fmt.Sprintf("Converting and downloading qcow2 from %s...", ip))
-	return p.transfer(ctx, ui, ip, c.HelperUser, signer, c.DiskDevice, c.OutputPath)
+	return p.transfer(ctx, ui, ip, c.HelperUser, signer, hostKey, c.DiskDevice, c.OutputPath)
+}
+
+// helperHostKey generates the helper's SSH host key and the cloud-init `ssh_keys` block that installs it, so the
+// download can pin it: the helper's key is otherwise unknown and any host answering on its IP would be trusted.
+func helperHostKey() (cloudInit string, pub ssh.PublicKey, err error) {
+	edPub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", nil, err
+	}
+	if pub, err = ssh.NewPublicKey(edPub); err != nil {
+		return "", nil, err
+	}
+	block, err := ssh.MarshalPrivateKey(priv, "")
+	if err != nil {
+		return "", nil, err
+	}
+	indented := strings.ReplaceAll(strings.TrimSpace(string(pem.EncodeToMemory(block))), "\n", "\n    ")
+	return "ssh_keys:\n  ed25519_private: |\n    " + indented + "\n  ed25519_public: " + string(ssh.MarshalAuthorizedKey(pub)), pub, nil
 }
