@@ -1,4 +1,3 @@
-# common/scripts/windows/windows-initialisation.ps1
 # Configures Windows Remote Management (WinRM) so that Packer can
 # take control of the build through its winrm communicator.
 

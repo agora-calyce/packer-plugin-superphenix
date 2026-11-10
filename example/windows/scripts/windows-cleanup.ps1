@@ -1,4 +1,3 @@
-# common/scripts/windows/windows-cleanup.ps1
 # Cleans temporary files and Windows Update leftovers before export.
 
 $servicesToRecycle = "wuauserv", "cryptSvc", "bits", "msiserver"

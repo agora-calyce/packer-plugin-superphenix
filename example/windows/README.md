@@ -13,4 +13,5 @@ Full guide: [`docs/windows.md`](../../docs/windows.md).
 
 Quick start: generate the ISO (`PASSWORD=... BOOTSTRAP_URL=http://<runner ip>:8080 sh answer-iso/make-answer-iso.sh out.iso`),
 host it at an unguessable URL reachable by Superphenix, allow TCP 8080 from the subnet into the runner, then
-`PKR_VAR_answer_iso_url=<url> packer build -color=false .` with `PKR_VAR_win_password` set to the same password.
+`PKR_VAR_iso_url=<Windows ISO url> PKR_VAR_answer_iso_url=<url> packer build -color=false .` with
+`PKR_VAR_win_password` set to the same password. The Windows ISO is yours to provide, at a URL Superphenix can download.

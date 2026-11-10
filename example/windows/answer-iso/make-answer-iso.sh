@@ -4,7 +4,8 @@
 # Variables: LOCALE (fr-FR), USERNAME (Administrateur), PASSWORD (required, throwaway: reuse it in winrm_password),
 #   HOSTNAME (windows-build), TIMEZONE (Romance Standard Time), IMAGE_KEY (/IMAGE/NAME or /IMAGE/INDEX),
 #   IMAGE_VALUE (Windows Server 2025 SERVERSTANDARD), PRODUCT_KEY (empty = no key),
-#   BOOTSTRAP_URL (required: Packer's HTTP server, e.g. http://RUNNER_IP:8080, = the template's http_port_min).
+#   BOOTSTRAP_URL (required: Packer's HTTP server, http://RUNNER_IP:8080 with the runner's private IP in
+#   your subnet and the template's http_port_min).
 # Requires xorriso and python3.
 set -eu
 out=${1:?usage: make-answer-iso.sh out.iso}

@@ -178,7 +178,7 @@ source "superphenix" "win2025" {
   # api_url, org_id, az, project_id, token, subnet_eid, storage_class ...
   vm_type  = "windows.2k25"  # sets UEFI, Secure Boot and TPM like the console does
   disk_bus = "sata"          # no virtio storage driver during Windows setup
-  iso_url  = "https://.../Win_Server_STD_CORE_2025_French.ISO"
+  iso_url  = var.iso_url          # your Windows ISO
   cd_url   = var.answer_iso_url   # the ISO from step 2
 
   cpu = 4
@@ -215,7 +215,7 @@ Then:
 
 ```sh
 packer init example/windows
-PKR_VAR_answer_iso_url=http://<EIP>/<random>/answers.iso packer build -color=false example/windows
+PKR_VAR_iso_url=https://.../windows-server-2025.iso PKR_VAR_answer_iso_url=http://<EIP>/<random>/answers.iso packer build -color=false example/windows
 ```
 
 ## What to expect
