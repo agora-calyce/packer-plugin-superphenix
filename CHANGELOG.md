@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Builder: fail at once, with a clear error, when Packer's cache directory (`PACKER_CACHE_DIR`) cannot be created. The SDK's HTTP server step otherwise retried opening its port lock file in a tight loop (about 800 log lines per second), hanging the build and filling `/tmp`.
+
 ### Added
 - Release files prepared but inactive in `release/` (goreleaser config, release and CI workflows, activation procedure).
 - Docs: Linux and Windows user guides (`docs/linux.md`, `docs/windows.md`), `example/windows/` (template, answer-file ISO generator and validator, sample `autounattend.xml`), reference of `boot_command`, `http_*`, `cd_*` and WinRM options, size formats (`4Gi` or `4`).
