@@ -29,6 +29,8 @@ func fake(t *testing.T) (*client.Client, *[]string) {
 			w.Write([]byte(`{"eid":"d1"}`))
 		case r.Method == "POST":
 			w.Write([]byte(`{"eid":"i1"}`))
+		case r.Method == "GET" && strings.Contains(r.URL.Path, "/disk/"):
+			w.Write([]byte(`{"disk":{"status":{"phase":"Succeeded"}}}`))
 		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/i1"):
 			w.Write([]byte(`{"eid":"i1","vmi":{"status":{"phase":"Running","interfaces":[{"ipAddress":"10.0.0.5"}]}}}`))
 		}

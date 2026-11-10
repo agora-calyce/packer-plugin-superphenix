@@ -14,6 +14,7 @@ import (
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"golang.org/x/crypto/ssh"
+	"gopkg.in/yaml.v3"
 )
 
 func run(t *testing.T, transferErr error) []string {
@@ -41,7 +42,7 @@ func run(t *testing.T, transferErr error) []string {
 	defer srv.Close()
 
 	api := client.New(srv.URL, "o", "az", "p", "tok")
-	p := &PostProcessor{transfer: func(_ context.Context, _ packersdk.Ui, host, _ string, _ ssh.Signer, _, _ string) error {
+	p := &PostProcessor{transfer: func(_ context.Context, _ packersdk.Ui, host, _ string, _ ssh.Signer, _ ssh.PublicKey, _, _ string) error {
 		if host != "10.0.0.9" {
 			t.Errorf("host = %s, want helper private IP", host)
 		}
@@ -99,5 +100,30 @@ func TestLocalWriterKeepsFirstError(t *testing.T) {
 func TestFreeBytes(t *testing.T) {
 	if free, err := freeBytes(t.TempDir()); err != nil || free == 0 {
 		t.Skipf("free space unavailable here: %d, %v", free, err)
+	}
+}
+
+// The cloud-init block must be valid YAML carrying the private half of the key the download pins.
+func TestHelperHostKey(t *testing.T) {
+	ci, pub, err := helperHostKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Keys struct {
+			Private string `yaml:"ed25519_private"`
+			Public  string `yaml:"ed25519_public"`
+		} `yaml:"ssh_keys"`
+	}
+	if err := yaml.Unmarshal([]byte(client.UserCloudInit("spx", "ssh-ed25519 AAAA", "qemu-utils")+ci), &doc); err != nil {
+		t.Fatal(err, ci)
+	}
+	signer, err := ssh.ParsePrivateKey([]byte(doc.Keys.Private))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := string(ssh.MarshalAuthorizedKey(pub))
+	if got := string(ssh.MarshalAuthorizedKey(signer.PublicKey())); got != want || doc.Keys.Public+"\n" != want {
+		t.Fatalf("host key mismatch: private gives %q, public is %q, pinned %q", got, doc.Keys.Public, want)
 	}
 }

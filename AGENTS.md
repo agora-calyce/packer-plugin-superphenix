@@ -6,7 +6,6 @@ post-processor `superphenix-export` (qcow2 export). Built for CI.
 - **Using the plugin in a Packer project** (templates, QEMU migration, troubleshooting): read
   [`docs/agent-usage.md`](docs/agent-usage.md).
 - **User guides**: [`docs/linux.md`](docs/linux.md) and [`docs/windows.md`](docs/windows.md) (keep them in sync with config changes).
-- **Test infrastructure** on Superphenix (runner, ISO host, EIP, security groups): [`docs/test-infrastructure.md`](docs/test-infrastructure.md).
 - **Changing the plugin**: read [`DESIGN.md`](DESIGN.md) (API endpoints, export flow, known quirks),
   then the rules below.
 

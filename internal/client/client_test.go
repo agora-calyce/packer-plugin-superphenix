@@ -94,15 +94,27 @@ func TestDeleteDiskRetriesWhileMounted(t *testing.T) {
 }
 
 func TestWaitDiskReady(t *testing.T) {
-	phases := []string{"Running", "Succeeded"}
+	phases := []string{"Running", "", "Succeeded"} // "": transient 502, must be retried
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"disk":{"status":{"phase":"` + phases[min(n, 1)] + `"}}}`))
+		if p := phases[min(n, 2)]; p == "" {
+			w.WriteHeader(http.StatusBadGateway)
+		} else {
+			w.Write([]byte(`{"disk":{"status":{"phase":"` + p + `"}}}`))
+		}
 		n++
 	}))
 	defer srv.Close()
-	if err := New(srv.URL, "o", "az", "p", "t").WaitDiskReady(context.Background(), "d", time.Millisecond); err != nil || n != 2 {
-		t.Fatalf("expected 2 calls without error, got %d, err=%v", n, err)
+	if err := New(srv.URL, "o", "az", "p", "t").WaitDiskReady(context.Background(), "d", time.Millisecond); err != nil || n != 3 {
+		t.Fatalf("expected 3 calls without error, got %d, err=%v", n, err)
+	}
+}
+
+func TestWaitFailsOnPermanentError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNotFound) }))
+	defer srv.Close()
+	if err := New(srv.URL, "o", "az", "p", "t").WaitStopped(context.Background(), "i", time.Millisecond); !IsNotFound(err) {
+		t.Fatalf("a 404 must stop the wait, got %v", err)
 	}
 }
 

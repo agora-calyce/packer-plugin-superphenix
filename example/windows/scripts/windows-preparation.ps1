@@ -1,6 +1,4 @@
-# common/scripts/windows/windows-preparation.ps1
-# Basic hardening: disables TLS 1.0/1.1 and SMBv1, clears the event
-# logs, removes PowerShell v2.
+# Basic hardening: disables TLS 1.0/1.1, SMBv1 and PowerShell v2.
 
 $ErrorActionPreference = 'Stop'
 

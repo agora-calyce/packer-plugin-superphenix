@@ -229,7 +229,9 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	if err, ok := state.GetOk("error"); ok {
 		return nil, err.(error)
 	}
-	if _, ok := state.GetOk(multistep.StateCancelled); ok {
+	// build_ok is set by the last step. Without it stepCreate.Cleanup has deleted everything: never return an
+	// artifact then, even when a halted step left no error (StateCancelled is set asynchronously by the runner).
+	if _, ok := state.GetOk("build_ok"); !ok {
 		return nil, errors.New("build cancelled")
 	}
 	instanceID, ok1 := state.Get("instance_id").(string)

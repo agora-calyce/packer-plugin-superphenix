@@ -104,14 +104,6 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 			spec.Disks = append(spec.Disks, client.Disk{Order: 2, Bus: "sata", CDROM: true, EID: s.cdID})
 		}
 		state.Put("drop_disks", drop)
-		for _, id := range append([]string{s.diskID}, drop...) {
-			wctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
-			err := api.WaitDiskReady(wctx, id, 5*time.Second)
-			cancel()
-			if err != nil {
-				return fail(state, err)
-			}
-		}
 		// With a vm_type (e.g. windows.2k25) and no explicit option, the type sets EFI/Secure Boot/TPM.
 		if c.VMType == "" || c.EFI != nil || c.SecureBoot != nil || c.TPM != nil {
 			adv := &client.Advanced{}
@@ -129,6 +121,18 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 		}
 	}
 	state.Put("disk_id", s.diskID)
+
+	// Both flows: a VM created before its disks are imported finds nothing bootable (see DESIGN.md).
+	ui.Say("Waiting for disk import...")
+	drop, _ := state.Get("drop_disks").([]string)
+	for _, id := range append([]string{s.diskID}, drop...) {
+		wctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+		err := api.WaitDiskReady(wctx, id, 5*time.Second)
+		cancel()
+		if err != nil {
+			return fail(state, err)
+		}
+	}
 
 	ui.Say("Creating instance...")
 	var inst client.Instance
@@ -197,7 +201,7 @@ func (stepBootCommand) Run(ctx context.Context, state multistep.StateBag) multis
 	select {
 	case <-time.After(c.BootWait):
 	case <-ctx.Done():
-		return multistep.ActionHalt
+		return fail(state, ctx.Err())
 	}
 	var vnc *client.VNC
 	for deadline := time.Now().Add(2 * time.Minute); ; time.Sleep(3 * time.Second) {
@@ -267,7 +271,7 @@ func (stepWaitIP) Run(ctx context.Context, state multistep.StateBag) multistep.S
 }
 func (stepWaitIP) Cleanup(multistep.StateBag) {}
 
-// stepStop cleanly stops the VM after provisioning (prerequisite for the 3b export).
+// stepStop cleanly stops the VM after provisioning (prerequisite for the export).
 type stepStop struct{}
 
 func (stepStop) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {

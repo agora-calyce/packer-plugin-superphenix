@@ -9,9 +9,9 @@ packer {
   }
 }
 
-variable "api_url"    { type = string }
-variable "org_id"     { type = string }
-variable "az"         { type = string }
+variable "api_url" { type = string }
+variable "org_id" { type = string }
+variable "az" { type = string }
 variable "project_id" { type = string }
 variable "subnet_eid" { type = string }
 variable "token" {
@@ -87,7 +87,6 @@ build {
     inline = ["cat /etc/os-release | head -2"]
   }
 
-  # Export validated from a cloud image and from ISO-based VMs (Ubuntu 26.04, Windows).
   post-processor "superphenix-export" {
     api_url          = var.api_url
     org_id           = var.org_id

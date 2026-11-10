@@ -1,4 +1,3 @@
-# common/scripts/windows/windows-cleanup.ps1
 # Cleans temporary files and Windows Update leftovers before export.
 
 $servicesToRecycle = "wuauserv", "cryptSvc", "bits", "msiserver"
@@ -31,3 +30,14 @@ Start-Service -Name $servicesToRecycle -ErrorAction SilentlyContinue
 # false) to simplify the build. Nothing re-enabled it afterwards -> the
 # final image shipped with the firewall permanently disabled.
 Set-NetFirewallProfile -All -Enabled True
+
+# windows-initialisation.ps1 opened WinRM with unencrypted Basic authentication for the build. Reverting it
+# here would cut the WinRM session Packer is using for this very script, so a one-shot startup task does it
+# at the next boot, which is the first boot of a VM deployed from the image. Keep this script as the last
+# provisioner: a reboot after it would close WinRM for the rest of the build.
+$revert = 'Start-Service WinRM; Set-Item WSMan:\localhost\Service\AllowUnencrypted $false; ' +
+    'Set-Item WSMan:\localhost\Service\Auth\Basic $false; ' +
+    'Unregister-ScheduledTask -TaskName PackerWinRMRevert -Confirm:$false'
+Register-ScheduledTask -TaskName PackerWinRMRevert -User SYSTEM -RunLevel Highest -Force `
+    -Trigger (New-ScheduledTaskTrigger -AtStartup) `
+    -Action (New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -Command `"$revert`"") | Out-Null

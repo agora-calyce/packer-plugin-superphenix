@@ -1,3 +1,4 @@
+# Ubuntu from a cloud image, provisioned over SSH, then exported to qcow2.
 packer {
   required_plugins {
     superphenix = {
@@ -7,15 +8,15 @@ packer {
   }
 }
 
-variable "api_url"    { type = string }
-variable "org_id"     { type = string }
-variable "az"         { type = string }
+variable "api_url" { type = string }
+variable "org_id" { type = string }
+variable "az" { type = string }
 variable "project_id" { type = string }
+variable "subnet_eid" { type = string }
 variable "token" {
   type      = string
   sensitive = true # injected by the masked CI variable PKR_VAR_token
 }
-variable "subnet_eid"  { type = string }
 
 locals {
   image = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
@@ -28,11 +29,11 @@ source "superphenix" "ubuntu" {
   project_id = var.project_id
   token      = var.token
 
-  source_url = local.image
-  cpu        = 2
-  memory     = "4Gi"
-  disk_size  = "20Gi"
-  subnet_eid = var.subnet_eid
+  source_url    = local.image
+  cpu           = 2
+  memory        = "4Gi"
+  disk_size     = "20Gi"
+  subnet_eid    = var.subnet_eid
   storage_class = "block-standard"
 
   communicator = "ssh"
