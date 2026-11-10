@@ -271,7 +271,7 @@ func (stepWaitIP) Run(ctx context.Context, state multistep.StateBag) multistep.S
 }
 func (stepWaitIP) Cleanup(multistep.StateBag) {}
 
-// stepStop cleanly stops the VM after provisioning (prerequisite for the 3b export).
+// stepStop cleanly stops the VM after provisioning (prerequisite for the export).
 type stepStop struct{}
 
 func (stepStop) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {

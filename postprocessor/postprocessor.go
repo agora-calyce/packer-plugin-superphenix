@@ -151,7 +151,7 @@ func ensureOutputDir(path string) error {
 	return nil
 }
 
-// export runs variant 3b. Each created resource is deleted by defer (success or failure).
+// export runs the helper-VM export (see DESIGN.md). Each created resource is deleted by defer (success or failure).
 func (p *PostProcessor) export(ctx context.Context, ui packersdk.Ui, api *client.Client, instanceID, diskID string) (err error) {
 	c := &p.config
 	// context.Background for cleanup: ctx may be cancelled.

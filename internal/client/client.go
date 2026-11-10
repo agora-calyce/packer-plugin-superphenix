@@ -73,8 +73,7 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &se) && se.Code == http.StatusNotFound
 }
 
-// Wrappers for the operations used by the 3b flow (see DESIGN.md).
-// Request/response bodies follow vm.CreateVMInfo; to be typed once the test env is available.
+// Wrappers for the operations used by the build and export flows (see DESIGN.md).
 
 // CreateInstance sends compute.memory as a quantity ("4Gi", API >= 0.10). If the API refuses it with a 400 that
 // mentions memory (older API: integer GiB), it retries once in the legacy form and remembers it.
