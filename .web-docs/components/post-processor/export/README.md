@@ -70,7 +70,7 @@ the helper is created for the occasion and its key is not known in advance.
 
 - `helper_cpu` (int) - vCPUs of the helper VM. Defaults to `2`.
 
-- `helper_memory` (string) - Memory of the helper VM. Defaults to `2Gi`. Whole GiB only, between 1 and 5000: write `2Gi` or `2` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+- `helper_memory` (string) - Memory of the helper VM. Defaults to `2Gi`. Whole GiB only, between 1 and 5000: write `2Gi` or `2` (other units such as `Mi` and fractions are rejected). The plugin sends `memory` to the API as a quantity (`4Gi`), or as a bare number to a Superphenix older than 0.10.
 
 - `helper_disk_size` (string) - Size of the helper's boot disk (whole GiB, `30Gi` or `30`). It
   also holds the converted qcow2, so it must be larger than the image

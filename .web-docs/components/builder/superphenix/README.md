@@ -101,7 +101,7 @@ alphabetized.
 
 - `cpu` (int) - Number of vCPUs. Defaults to `2`.
 
-- `memory` (string) - Amount of memory. Defaults to `4Gi`. Whole GiB only, between 1 and 5000: write `4Gi` or `4` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+- `memory` (string) - Amount of memory. Defaults to `4Gi`. Whole GiB only, between 1 and 5000: write `4Gi` or `4` (other units such as `Mi` and fractions are rejected). The plugin sends `memory` to the API as a quantity (`4Gi`), or as a bare number to a Superphenix older than 0.10.
 
 - `disk_size` (string) - Size of the boot disk. Defaults to `20Gi`. Whole GiB only, between 1 and 5000: write `20Gi` or `20` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 

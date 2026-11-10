@@ -77,9 +77,9 @@ Reference documentation:
   Linux, other AZs and API versions.
 - The helper's SSH host key is not verified (the helper is ephemeral).
 - The runner must be inside the Superphenix network (see Requirements).
-- Sizes follow the deployed API: `memory`, `disk_size` and the other sizes are whole GiB, written `4Gi` or `4`
-  (other units and fractions are rejected) and sent to the API as a bare number. Newer API versions accept a
-  quantity string for `memory`; this will need to follow when the API is upgraded.
+- `memory`, `disk_size` and the other sizes are whole GiB, written `4Gi` or `4` (other units and fractions are
+  rejected). Since Superphenix 0.10 the API takes `memory` as a quantity (`"4Gi"`); the plugin sends that and
+  falls back to the bare integer on an older API. Disk sizes are still sent as bare integers.
 - Tested with one API version and one AZ (`fr01-als01`).
 
 ## Development

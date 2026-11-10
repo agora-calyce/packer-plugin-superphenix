@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Superphenix 0.10: `compute.memory` is now a quantity string (`"4Gi"`) instead of an integer in GiB. The plugin sends the quantity and falls back to the integer on a 400 from an older API.
 - Builder: fail at once, with a clear error, when Packer's cache directory (`PACKER_CACHE_DIR`) cannot be created. The SDK's HTTP server step otherwise retried opening its port lock file in a tight loop (about 800 log lines per second), hanging the build and filling `/tmp`.
 
 ### Added

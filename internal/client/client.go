@@ -17,11 +17,12 @@ import (
 type Client struct {
 	BaseURL, OrgID, AZ, ProjectID, Token string
 	HTTP                                 *http.Client
+	legacyMemory                         bool // set once the API refused the "4Gi" quantity form
 }
 
 func New(baseURL, orgID, az, projectID, token string) *Client {
 	return &Client{strings.TrimRight(baseURL, "/"), orgID, az, projectID, token,
-		&http.Client{Timeout: 60 * time.Second}}
+		&http.Client{Timeout: 60 * time.Second}, false}
 }
 
 // Call sends a JSON request; in/out may be nil. Any non-2xx response is an error.
@@ -75,8 +76,21 @@ func IsNotFound(err error) bool {
 // Wrappers for the operations used by the 3b flow (see DESIGN.md).
 // Request/response bodies follow vm.CreateVMInfo; to be typed once the test env is available.
 
-func (c *Client) CreateInstance(ctx context.Context, spec, out any) error {
-	return c.Call(ctx, "POST", "instance", spec, out)
+// CreateInstance sends compute.memory as a quantity ("4Gi", API >= 0.10). If the API refuses it with a 400 that
+// mentions memory (older API: integer GiB), it retries once in the legacy form and remembers it.
+func (c *Client) CreateInstance(ctx context.Context, spec CreateVMInfo, out any) error {
+	spec.Compute.Legacy = c.legacyMemory
+	err := c.Call(ctx, "POST", "instance", spec, out)
+	var se *StatusError
+	if spec.Compute.Legacy || !errors.As(err, &se) || se.Code != http.StatusBadRequest || !strings.Contains(se.Msg, "memory") {
+		return err
+	}
+	spec.Compute.Legacy = true
+	if c.Call(ctx, "POST", "instance", spec, out) != nil {
+		return err // not a format problem: report the original error
+	}
+	c.legacyMemory = true
+	return nil
 }
 func (c *Client) StartInstance(ctx context.Context, id string) error {
 	return c.Call(ctx, "GET", "instance/"+id+"/start", nil, nil)
