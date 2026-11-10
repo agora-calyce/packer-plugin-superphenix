@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -52,9 +53,24 @@ type CloudInit struct {
 	Custom bool   `json:"custom"`
 }
 type Compute struct {
-	CPU    int `json:"cpu"`
-	Memory int `json:"memory"` // Gio
+	CPU    int
+	Memory int  // GiB
+	Legacy bool // API < 0.10: memory is a bare integer in GiB; since 0.10 it is a quantity string ("4Gi")
 }
+
+func (c Compute) MarshalJSON() ([]byte, error) {
+	if c.Legacy {
+		return json.Marshal(struct {
+			CPU    int `json:"cpu"`
+			Memory int `json:"memory"`
+		}{c.CPU, c.Memory})
+	}
+	return json.Marshal(struct {
+		CPU    int    `json:"cpu"`
+		Memory string `json:"memory"`
+	}{c.CPU, fmt.Sprintf("%dGi", c.Memory)})
+}
+
 type General struct {
 	Labels      []string `json:"labels,omitempty"`
 	RunStrategy string   `json:"runStrategy,omitempty"`
@@ -126,8 +142,7 @@ func GiB(size string) (string, error) {
 	return strconv.Itoa(n), err
 }
 
-// GiBInt converts "4Gi" or "4" to 4. The deployed API expects compute.memory as an integer in GiB
-// (ponytail: newer API versions expect a "4Gi" quantity, to revisit on update).
+// GiBInt converts "4Gi" or "4" to 4 (whole GiB; Compute sends it as "4Gi", or as 4 to an API older than 0.10).
 func GiBInt(size string) (int, error) {
 	n, err := strconv.Atoi(strings.TrimSuffix(size, "Gi"))
 	if err != nil || n < 1 || n > 5000 {

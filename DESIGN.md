@@ -15,7 +15,7 @@ Base: `{api_url}/{orgId}/api/spx-ctrl/{az}/{projectId}/...`. Spec: `https://docs
 |---|---|
 | Create a disk | `POST /disk` (`storage` = integer in GiB, `storageClass` required, `source.type` = `http`) |
 | Wait for import | `GET /disk/{id}` → `disk.status.phase == "Succeeded"` |
-| Create VM / helper | `POST /instance` (`network` required, `compute.memory` integer in GiB, labels `user.superphenix.net/<key>:<value>`) |
+| Create VM / helper | `POST /instance` (`network` required, `compute.memory` = quantity string `"4Gi"` since API 0.10 (integer in GiB before), labels `user.superphenix.net/<key>:<value>`) |
 | IP / state | `GET /instance/{id}` (`vmi.status.interfaces[].ipAddresses`, `vm.status.printableStatus`) |
 | Stop | `GET /instance/{id}/stop` |
 | Detach a disk | `GET /disk/{id}/unmount` |
@@ -47,7 +47,7 @@ Tested with Ubuntu Server 26.04 (2026-11-08).
 6. Delete the helper, then the disks. Everything is in `defer`s: it also runs on failure or cancellation (Ctrl-C closes the SSH connection and removes the partial file).
 
 ## Known limits
-- Tested with one API version and one AZ (`fr01-als01`); the deployed version expects sizes (`memory`, `storage`) as integers in GiB without unit. The plugin accepts `4Gi` or `4` and sends `4`; recent `main` code of the API expects a quantity (`"4Gi"`): to follow when the API is updated.
+- Tested with one API version and one AZ (`fr01-als01`); API 0.10 changed `compute.memory` from an integer in GiB to a quantity string (`"4Gi"`; `storage` stays an integer in GiB). The plugin accepts `4Gi` or `4`, sends `"4Gi"`, and if the API answers 400 mentioning `memory` retries once with the bare integer and remembers it (`CreateInstance`). Only tested against the pre-0.10 API so far.
 - The helper's SSH host key is not verified (ephemeral VM, key unknown in advance).
 - Deleting a disk can return 500 for up to several minutes after its VM was deleted: the plugin retries for 10 min.
 - If `Ctrl-C` or a crash kills Packer during the build, resources already created may remain: the `user.superphenix.net/created-by:packer*` labels make them easy to find.

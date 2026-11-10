@@ -170,3 +170,35 @@ func TestDeleteDiskRetriesOn500(t *testing.T) {
 		t.Fatalf("err=%v calls=%d", err, n)
 	}
 }
+
+func TestCreateInstanceMemoryFormat(t *testing.T) {
+	var bodies []string
+	legacyAPI := true // API < 0.10: rejects a string memory
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(b))
+		if legacyAPI && strings.Contains(string(b), `"memory":"`) {
+			http.Error(w, "cannot unmarshal string into field compute.memory of type int", 400)
+			return
+		}
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "org", "az1", "proj", "tok")
+	spec := CreateVMInfo{Compute: Compute{CPU: 2, Memory: 4}}
+	if err := c.CreateInstance(context.Background(), spec, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(bodies) != 2 || !strings.Contains(bodies[0], `"memory":"4Gi"`) || !strings.Contains(bodies[1], `"memory":4`) {
+		t.Fatalf("expected quantity then legacy retry, got %v", bodies)
+	}
+	if err := c.CreateInstance(context.Background(), spec, nil); err != nil || len(bodies) != 3 || !strings.Contains(bodies[2], `"memory":4`) {
+		t.Fatalf("legacy form must be remembered: %v %v", err, bodies)
+	}
+
+	bodies, legacyAPI = nil, false
+	c = New(srv.URL, "org", "az1", "proj", "tok")
+	if err := c.CreateInstance(context.Background(), spec, nil); err != nil || len(bodies) != 1 {
+		t.Fatalf("new API: single quantity request expected: %v %v", err, bodies)
+	}
+}

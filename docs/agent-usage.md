@@ -25,7 +25,7 @@ The post-processor needs the builder artifact; it cannot be used with another bu
    are only tested with Ubuntu Server 26.04 (see "ISO installs" below). Superphenix downloads every URL
    itself (`source_url`, `iso_url`, `cd_url`, `helper_image_url`): they must be reachable from Superphenix.
 3. **Windows works with `cd_url`; read `docs/windows.md` first** (validated with Windows Server 2025 FR, about 37 min, 43 min with the qcow2 export; booting the exported qcow2 is not tested). Superphenix imports disks from a URL it can reach, not from the runner's private IP, so a generated ISO (`cd_files`/`cd_content`) cannot be imported from a private runner. Use `cd_url` with a hosted answer-file ISO (`example/windows/answer-iso/make-answer-iso.sh`); the WinRM bootstrap is then fetched from Packer's HTTP server (`http_directory`). The Windows installer has no curl/PowerShell and an AZERTY keyboard on French ISOs. `floppy_*` is not supported.
-4. **Sizes are whole GiB**: `memory = "4Gi"` or `"4"`, `disk_size = "20Gi"` or `"20"` (1 to 5000). No `4096Mi`, `4G`, `1.5Gi`: they are rejected. The plugin sends the bare number to the API.
+4. **Sizes are whole GiB**: `memory = "4Gi"` or `"4"`, `disk_size = "20Gi"` or `"20"` (1 to 5000). No `4096Mi`, `4G`, `1.5Gi`: they are rejected. The plugin sends `memory` as `"4Gi"` to Superphenix 0.10+ and as a bare number to older versions.
 5. The token is a secret: pass it with `variable "token" { sensitive = true }` fed by `PKR_VAR_token`
    (masked CI variable). Never write it in a template, a log, a commit or a message.
 6. One build at a time per project (use GitLab `resource_group`).

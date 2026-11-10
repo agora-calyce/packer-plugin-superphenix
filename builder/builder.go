@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
 	"github.com/hashicorp/hcl/v2/hcldec"
@@ -75,7 +76,7 @@ type Config struct {
 	ISODiskSize string `mapstructure:"iso_disk_size"`
 	// Number of vCPUs. Defaults to `2`.
 	CPU int `mapstructure:"cpu"`
-	// Amount of memory. Defaults to `4Gi`. Whole GiB only, between 1 and 5000: write `4Gi` or `4` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
+	// Amount of memory. Defaults to `4Gi`. Whole GiB only, between 1 and 5000: write `4Gi` or `4` (other units such as `Mi` and fractions are rejected). The plugin sends `memory` to the API as a quantity (`4Gi`), or as a bare number to a Superphenix older than 0.10.
 	Memory string `mapstructure:"memory"`
 	// Size of the boot disk. Defaults to `20Gi`. Whole GiB only, between 1 and 5000: write `20Gi` or `20` (other units such as `Mi` and fractions are rejected; the plugin sends the bare number to the API).
 	DiskSize string `mapstructure:"disk_size"`
@@ -202,6 +203,11 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 			&commonsteps.StepCreateCD{Files: c.CDFiles, Content: c.CDContent, Label: c.CDLabel},
 			&stepStageCD{dir: dir})
 	}
+	if c.HTTPDir != "" || len(c.HTTPContent) > 0 {
+		if err := checkCacheDir(); err != nil {
+			return nil, err
+		}
+	}
 	steps = append(steps,
 		commonsteps.HTTPServerFromHTTPConfig(&c.HTTPConfig),
 		&stepCreate{},
@@ -233,4 +239,17 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	}
 	return &Artifact{InstanceID: instanceID, DiskID: diskID, Client: state.Get("client").(*client.Client),
 		StateData: map[string]interface{}{"generated_data": state.Get("generated_data")}}, nil
+}
+
+// checkCacheDir fails fast when Packer's cache directory (PACKER_CACHE_DIR) cannot be created. The SDK's HTTP
+// server step otherwise retries opening its port lock file in a tight loop, forever, flooding the log.
+func checkCacheDir() error {
+	p, err := packersdk.CachePath("port", "check")
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Dir(p)); err != nil {
+		return fmt.Errorf("the Packer cache directory is unusable (check PACKER_CACHE_DIR and its permissions): %w", err)
+	}
+	return nil
 }
