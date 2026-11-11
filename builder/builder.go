@@ -146,9 +146,6 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	if _, err := client.GiB(c.ISODiskSize); err != nil {
 		errs = append(errs, fmt.Errorf("iso_disk_size: %w", err))
 	}
-	if c.ISOURL == "" && len(c.BootCommand) > 0 {
-		errs = append(errs, errors.New("boot_command needs iso_url"))
-	}
 	errs = append(errs, c.HTTPConfig.Prepare(&interpolate.Context{})...)
 	errs = append(errs, c.CDConfig.Prepare(&interpolate.Context{})...)
 	if c.hasCD() && c.ISOURL == "" {

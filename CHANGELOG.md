@@ -10,6 +10,7 @@
 - Windows example: `windows-cleanup.ps1` registers a one-shot startup task that turns off the unencrypted Basic WinRM opened for the build. Images built before this keep it enabled.
 
 ### Added
+- Builder: `boot_command`/`boot_wait` are accepted with `source_url` (typed on the VNC console of an image without cloud-init). They were rejected without `iso_url`; configurations that do not set `boot_command` are unaffected.
 - Builder: ISO source (`iso_url`, `iso_disk_size`, `efi`, `secure_boot`, `tpm`): empty disk + ISO CD-ROM, UEFI, `boot_command`/`boot_wait` typed over the VNC console, `http_content`/`http_directory`. The ISO disk is removed at the end of the build. Tested with Ubuntu Server 26.04.
 - Builder: Windows (tested with Server 2025 FR): `cd_url`/`cd_disk_size` (hosted answer-file ISO), `cd_files`/`cd_content`/`cd_label` (generated ISO, needs a runner reachable by Superphenix and xorriso), `disk_bus`, WinRM communicator. `vm_type` keeps its own EFI/Secure Boot/TPM defaults.
 - Builder: `user_data`. With `source_url`, extra `#cloud-config` merged with the plugin's cloud-init. With `iso_url`, passed as is (answer file for an installer, no network needed).

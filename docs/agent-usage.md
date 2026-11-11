@@ -33,7 +33,7 @@ The post-processor needs the builder artifact; it cannot be used with another bu
 ## Required arguments
 
 Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, and one of `source_url` / `iso_url`.
-Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, ISO only: `iso_disk_size` ("8Gi"), `disk_bus` ("virtio", `sata` for Windows), `efi` (true), `secure_boot`, `tpm`, `boot_command`, `boot_wait`, `http_content`/`http_directory`, `cd_url`/`cd_disk_size` (hosted answer-file ISO), `cd_files`/`cd_content`/`cd_label`. Communicator: `communicator = "ssh"` with the usual `ssh_*` settings (`ssh_username` defaults to `spx`; with a cloud image the plugin creates that user itself with passwordless sudo), or `communicator = "winrm"` with `winrm_username` and `winrm_password` (Windows).
+Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, `boot_command`, `boot_wait` (typed over VNC; also with `source_url` for an image without cloud-init), ISO only: `iso_disk_size` ("8Gi"), `disk_bus` ("virtio", `sata` for Windows), `efi` (true), `secure_boot`, `tpm`, `http_content`/`http_directory`, `cd_url`/`cd_disk_size` (hosted answer-file ISO), `cd_files`/`cd_content`/`cd_label`. Communicator: `communicator = "ssh"` with the usual `ssh_*` settings (`ssh_username` defaults to `spx`; with a cloud image the plugin creates that user itself with passwordless sudo), or `communicator = "winrm"` with `winrm_username` and `winrm_password` (Windows).
 
 Post-processor: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, `output_path`,
 `helper_image_url` (any cloud-init Linux cloud image that can install `qemu-utils`; reusing the build image works).
