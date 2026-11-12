@@ -6,7 +6,7 @@
 - Post-processor: exports the disk as qcow2 to the machine running Packer, through a helper VM.
 - Auth: API token (header `Authorization: api-token <token>`, created in the console) via a masked CI variable. Hand-written HTTP client (no public Go SDK).
 - Network: the runner reaches the VMs' **private IPs** (builder and export helper). It must sit in the Superphenix subnet, or behind a VPN. Exposure through an EIP is not supported.
-- Distribution: GitHub Releases, `packer init` (`PACKER_GITHUB_API_TOKEN` if the repository is private). The release files in `release/` are prepared but inactive and untested (see `release/README.md`).
+- Distribution: GitHub Releases, `packer init` (`PACKER_GITHUB_API_TOKEN` if the repository is private). The release pipeline (`.github/workflows/`, `.goreleaser.yml`) has not run yet (see `release/README.md`).
 - Validated end to end, export included: Ubuntu cloud image, Ubuntu Server 26.04 ISO, Windows Server 2025 FR.
 
 ## Superphenix API used

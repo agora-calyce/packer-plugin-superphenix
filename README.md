@@ -97,7 +97,7 @@ make plugin-check # validate the binary with packer-sdc
 Install `packer-sdc` with `go install github.com/hashicorp/packer-plugin-sdk/cmd/packer-sdc@latest`. To try a
 local build: `packer plugins install --path packer-plugin-superphenix github.com/agora-calyce/superphenix`.
 
-Release files (goreleaser, GitHub Actions) are prepared but **inactive** in [`release/`](release/README.md).
+Releases are built by GitHub Actions and goreleaser on a `v*` tag: see [`release/README.md`](release/README.md).
 
 Docs are written in `docs/` and rendered to `.web-docs/` by `make generate`; commit the result, it is what the
 Packer integrations library reads (`.web-docs/metadata.hcl` describes the integration).

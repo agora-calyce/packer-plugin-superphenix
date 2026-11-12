@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-11-12
 
 ### Breaking changes
 - `superphenix-export`: removed `eip_eid` and `runner_cidr` (Packer reports them as unknown arguments). EIP exposure is no longer supported: Packer must run inside the Superphenix subnet, or behind a VPN, to reach the helper's private IP, as it already does for the builder.
@@ -19,7 +19,7 @@
 - Builder: `user_data`. With `source_url`, extra `#cloud-config` merged with the plugin's cloud-init. With `iso_url`, passed as is (answer file for an installer, no network needed).
 - Post-processor: the free space of the output volume is checked before the download.
 - Docs: user guides (`docs/linux.md`, `docs/windows.md`), `example/windows/` (template, answer-file ISO generator and validator).
-- Release files prepared but inactive in `release/`.
+- Release pipeline (GitHub Actions, goreleaser, GPG-signed checksums), untested until the first tag: see `release/README.md`.
 
 ### Fixed
 - Post-processor: the qcow2 is downloaded to `output_path.part` and renamed on success; a failed download no longer deletes a previous image.
