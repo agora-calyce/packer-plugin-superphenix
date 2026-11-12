@@ -168,7 +168,8 @@ alphabetized.
 
 ### Boot command
 
-`boot_command` is typed on the VM's VNC console (ISO installs only), after `boot_wait`. The keyboard layout is
+`boot_command` is typed on the VM's VNC console, after `boot_wait`. It also works with `source_url`, for an image
+without cloud-init that must be set up from its console (enable SSH, set a password). The keyboard layout is
 the installer's: on a French Windows installer, keys are mapped as on an AZERTY keyboard.
 
 <!-- Code generated from the comments of the BootConfig struct in bootcommand/config.go; DO NOT EDIT MANUALLY -->

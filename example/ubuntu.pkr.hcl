@@ -20,6 +20,8 @@ variable "token" {
 
 locals {
   image = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  # Not the build image: two disks with the same labels/UUIDs make the helper mount the wrong one.
+  helper_image = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
 }
 
 source "superphenix" "ubuntu" {
@@ -55,7 +57,7 @@ build {
     token      = var.token
 
     output_path      = "output/ubuntu.qcow2"
-    helper_image_url = local.image
+    helper_image_url = local.helper_image
     subnet_eid       = var.subnet_eid
     storage_class    = "block-standard"
   }

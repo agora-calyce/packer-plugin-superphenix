@@ -140,7 +140,7 @@ post-processor "superphenix-export" {
   token            = var.token
   subnet_eid       = var.subnet_eid
   storage_class    = "block-standard"
-  helper_image_url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  helper_image_url = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2" # not the build image (see below)
   output_path      = "output/image.qcow2"
 }
 ```

@@ -127,3 +127,19 @@ func TestHelperHostKey(t *testing.T) {
 		t.Fatalf("host key mismatch: private gives %q, public is %q, pinned %q", got, doc.Keys.Public, want)
 	}
 }
+
+func TestCheckOutputFree(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "image.qcow2")
+	if err := checkOutputFree(out, false); err != nil {
+		t.Fatalf("missing file must be accepted: %v", err)
+	}
+	if err := os.WriteFile(out, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkOutputFree(out, false); err == nil {
+		t.Fatal("existing output must be refused without -force")
+	}
+	if err := checkOutputFree(out, true); err != nil {
+		t.Fatalf("-force must allow overwriting: %v", err)
+	}
+}

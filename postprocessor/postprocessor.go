@@ -17,6 +17,7 @@ import (
 	"github.com/agora-calyce/packer-plugin-superphenix/builder"
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
 	"github.com/hashicorp/hcl/v2/hcldec"
+	"github.com/hashicorp/packer-plugin-sdk/common"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
@@ -25,6 +26,8 @@ import (
 
 // Config is the configuration of the Superphenix export post-processor.
 type Config struct {
+	common.PackerConfig `mapstructure:",squash"`
+
 	// Path of the qcow2 file written on the machine running Packer.
 	OutputPath string `mapstructure:"output_path" required:"true"`
 
@@ -40,7 +43,9 @@ type Config struct {
 	Token string `mapstructure:"token" required:"true"`
 
 	// URL of a Linux cloud image used for the helper VM. It must provide
-	// cloud-init and allow installing `qemu-utils` from its package manager.
+	// cloud-init and allow installing `qemu-utils` from its package manager. It must
+	// not be the image the builder used: two disks with the same filesystem labels
+	// and UUIDs make the helper mount the exported disk instead of its own.
 	HelperImageURL string `mapstructure:"helper_image_url" required:"true"`
 	// vCPUs of the helper VM. Defaults to `2`.
 	HelperCPU int `mapstructure:"helper_cpu"`
@@ -135,6 +140,9 @@ func (p *PostProcessor) PostProcess(ctx context.Context, ui packersdk.Ui, a pack
 	if err := ensureOutputDir(c.OutputPath); err != nil {
 		return nil, false, false, err
 	}
+	if err := checkOutputFree(c.OutputPath, c.PackerForce); err != nil {
+		return nil, false, false, err
+	}
 	api := client.New(c.APIURL, c.OrgID, c.AZ, c.ProjectID, c.Token)
 	if err := p.export(ctx, ui, api, instanceID, diskID); err != nil {
 		return nil, false, false, err
@@ -147,6 +155,14 @@ func (p *PostProcessor) PostProcess(ctx context.Context, ui packersdk.Ui, a pack
 func ensureOutputDir(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("output_path: %w", err)
+	}
+	return nil
+}
+
+// checkOutputFree refuses to overwrite an existing output_path unless Packer runs with -force (Packer's usual rule).
+func checkOutputFree(path string, force bool) error {
+	if _, err := os.Stat(path); err == nil && !force {
+		return fmt.Errorf("output_path %s already exists: remove it or run packer build with -force", path)
 	}
 	return nil
 }

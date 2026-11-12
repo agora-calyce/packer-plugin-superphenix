@@ -97,8 +97,25 @@ func (c *Client) StartInstance(ctx context.Context, id string) error {
 func (c *Client) StopInstance(ctx context.Context, id string) error {
 	return c.Call(ctx, "GET", "instance/"+id+"/stop", nil, nil)
 }
+
+// deleteInstanceRetry: delay between two attempts after a transient error while deleting an instance.
+var deleteInstanceRetry = 5 * time.Second
+
+// DeleteInstance retries (2 min max) on 5xx and network errors: it is called from cleanup paths, where a single
+// transient failure would leak the VM and make every disk deletion wait for a VM that never goes away.
 func (c *Client) DeleteInstance(ctx context.Context, id string) error {
-	return c.Call(ctx, "DELETE", "instance/"+id, nil, nil)
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		err := c.Call(ctx, "DELETE", "instance/"+id, nil, nil)
+		if err == nil || !transient(err) || time.Now().After(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(deleteInstanceRetry):
+		}
+	}
 }
 func (c *Client) UnmountDisk(ctx context.Context, id string) error {
 	return c.Call(ctx, "GET", "disk/"+id+"/unmount", nil, nil)

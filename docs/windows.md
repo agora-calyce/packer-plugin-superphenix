@@ -64,10 +64,10 @@ sh example/windows/answer-iso/make-answer-iso.sh answers-win2025-fr.iso
 |---|---|---|
 | `PASSWORD` | required | Password of the build account (also the local Administrator). Use the **same value** as `winrm_password` in the template. |
 | `BOOTSTRAP_URL` | required | Packer HTTP server as the VM sees it: `http://<runner private IP>:<http_port_min>`. |
-| `USERNAME` | `Administrateur` | Build account. Must match `winrm_username`. Use `Administrator` on an English ISO. |
+| `WIN_USERNAME` | `Administrateur` | Build account. Must match `winrm_username`. Use `Administrator` on an English ISO. |
 | `LOCALE` | `fr-FR` | Language and keyboard of the installer. Must be one the Windows ISO contains. |
 | `TIMEZONE` | `Romance Standard Time` | Windows time zone name. |
-| `HOSTNAME` | `windows-build` | Computer name. |
+| `WIN_HOSTNAME` | `windows-build` | Computer name. |
 | `IMAGE_KEY` / `IMAGE_VALUE` | `/IMAGE/NAME`, `Windows Server 2025 SERVERSTANDARD` | Edition to install. Use `IMAGE_KEY=/IMAGE/INDEX` with `IMAGE_VALUE=2` to select by index. |
 | `PRODUCT_KEY` | empty | Product key, if the ISO needs one (an evaluation ISO does not). |
 

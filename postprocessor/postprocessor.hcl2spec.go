@@ -10,20 +10,28 @@ import (
 // FlatConfig is an auto-generated flat version of Config.
 // Where the contents of a field with a `mapstructure:,squash` tag are bubbled up.
 type FlatConfig struct {
-	OutputPath     *string `mapstructure:"output_path" required:"true" cty:"output_path" hcl:"output_path"`
-	APIURL         *string `mapstructure:"api_url" required:"true" cty:"api_url" hcl:"api_url"`
-	OrgID          *string `mapstructure:"org_id" required:"true" cty:"org_id" hcl:"org_id"`
-	AZ             *string `mapstructure:"az" required:"true" cty:"az" hcl:"az"`
-	ProjectID      *string `mapstructure:"project_id" required:"true" cty:"project_id" hcl:"project_id"`
-	Token          *string `mapstructure:"token" required:"true" cty:"token" hcl:"token"`
-	HelperImageURL *string `mapstructure:"helper_image_url" required:"true" cty:"helper_image_url" hcl:"helper_image_url"`
-	HelperCPU      *int    `mapstructure:"helper_cpu" cty:"helper_cpu" hcl:"helper_cpu"`
-	HelperMemory   *string `mapstructure:"helper_memory" cty:"helper_memory" hcl:"helper_memory"`
-	HelperDiskSize *string `mapstructure:"helper_disk_size" cty:"helper_disk_size" hcl:"helper_disk_size"`
-	HelperUser     *string `mapstructure:"helper_ssh_username" cty:"helper_ssh_username" hcl:"helper_ssh_username"`
-	DiskDevice     *string `mapstructure:"disk_device" cty:"disk_device" hcl:"disk_device"`
-	StorageClass   *string `mapstructure:"storage_class" required:"true" cty:"storage_class" hcl:"storage_class"`
-	SubnetEID      *string `mapstructure:"subnet_eid" required:"true" cty:"subnet_eid" hcl:"subnet_eid"`
+	PackerBuildName     *string           `mapstructure:"packer_build_name" cty:"packer_build_name" hcl:"packer_build_name"`
+	PackerBuilderType   *string           `mapstructure:"packer_builder_type" cty:"packer_builder_type" hcl:"packer_builder_type"`
+	PackerCoreVersion   *string           `mapstructure:"packer_core_version" cty:"packer_core_version" hcl:"packer_core_version"`
+	PackerDebug         *bool             `mapstructure:"packer_debug" cty:"packer_debug" hcl:"packer_debug"`
+	PackerForce         *bool             `mapstructure:"packer_force" cty:"packer_force" hcl:"packer_force"`
+	PackerOnError       *string           `mapstructure:"packer_on_error" cty:"packer_on_error" hcl:"packer_on_error"`
+	PackerUserVars      map[string]string `mapstructure:"packer_user_variables" cty:"packer_user_variables" hcl:"packer_user_variables"`
+	PackerSensitiveVars []string          `mapstructure:"packer_sensitive_variables" cty:"packer_sensitive_variables" hcl:"packer_sensitive_variables"`
+	OutputPath          *string           `mapstructure:"output_path" required:"true" cty:"output_path" hcl:"output_path"`
+	APIURL              *string           `mapstructure:"api_url" required:"true" cty:"api_url" hcl:"api_url"`
+	OrgID               *string           `mapstructure:"org_id" required:"true" cty:"org_id" hcl:"org_id"`
+	AZ                  *string           `mapstructure:"az" required:"true" cty:"az" hcl:"az"`
+	ProjectID           *string           `mapstructure:"project_id" required:"true" cty:"project_id" hcl:"project_id"`
+	Token               *string           `mapstructure:"token" required:"true" cty:"token" hcl:"token"`
+	HelperImageURL      *string           `mapstructure:"helper_image_url" required:"true" cty:"helper_image_url" hcl:"helper_image_url"`
+	HelperCPU           *int              `mapstructure:"helper_cpu" cty:"helper_cpu" hcl:"helper_cpu"`
+	HelperMemory        *string           `mapstructure:"helper_memory" cty:"helper_memory" hcl:"helper_memory"`
+	HelperDiskSize      *string           `mapstructure:"helper_disk_size" cty:"helper_disk_size" hcl:"helper_disk_size"`
+	HelperUser          *string           `mapstructure:"helper_ssh_username" cty:"helper_ssh_username" hcl:"helper_ssh_username"`
+	DiskDevice          *string           `mapstructure:"disk_device" cty:"disk_device" hcl:"disk_device"`
+	StorageClass        *string           `mapstructure:"storage_class" required:"true" cty:"storage_class" hcl:"storage_class"`
+	SubnetEID           *string           `mapstructure:"subnet_eid" required:"true" cty:"subnet_eid" hcl:"subnet_eid"`
 }
 
 // FlatMapstructure returns a new FlatConfig.
@@ -38,20 +46,28 @@ func (*Config) FlatMapstructure() interface{ HCL2Spec() map[string]hcldec.Spec }
 // The decoded values from this spec will then be applied to a FlatConfig.
 func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 	s := map[string]hcldec.Spec{
-		"output_path":         &hcldec.AttrSpec{Name: "output_path", Type: cty.String, Required: false},
-		"api_url":             &hcldec.AttrSpec{Name: "api_url", Type: cty.String, Required: false},
-		"org_id":              &hcldec.AttrSpec{Name: "org_id", Type: cty.String, Required: false},
-		"az":                  &hcldec.AttrSpec{Name: "az", Type: cty.String, Required: false},
-		"project_id":          &hcldec.AttrSpec{Name: "project_id", Type: cty.String, Required: false},
-		"token":               &hcldec.AttrSpec{Name: "token", Type: cty.String, Required: false},
-		"helper_image_url":    &hcldec.AttrSpec{Name: "helper_image_url", Type: cty.String, Required: false},
-		"helper_cpu":          &hcldec.AttrSpec{Name: "helper_cpu", Type: cty.Number, Required: false},
-		"helper_memory":       &hcldec.AttrSpec{Name: "helper_memory", Type: cty.String, Required: false},
-		"helper_disk_size":    &hcldec.AttrSpec{Name: "helper_disk_size", Type: cty.String, Required: false},
-		"helper_ssh_username": &hcldec.AttrSpec{Name: "helper_ssh_username", Type: cty.String, Required: false},
-		"disk_device":         &hcldec.AttrSpec{Name: "disk_device", Type: cty.String, Required: false},
-		"storage_class":       &hcldec.AttrSpec{Name: "storage_class", Type: cty.String, Required: false},
-		"subnet_eid":          &hcldec.AttrSpec{Name: "subnet_eid", Type: cty.String, Required: false},
+		"packer_build_name":          &hcldec.AttrSpec{Name: "packer_build_name", Type: cty.String, Required: false},
+		"packer_builder_type":        &hcldec.AttrSpec{Name: "packer_builder_type", Type: cty.String, Required: false},
+		"packer_core_version":        &hcldec.AttrSpec{Name: "packer_core_version", Type: cty.String, Required: false},
+		"packer_debug":               &hcldec.AttrSpec{Name: "packer_debug", Type: cty.Bool, Required: false},
+		"packer_force":               &hcldec.AttrSpec{Name: "packer_force", Type: cty.Bool, Required: false},
+		"packer_on_error":            &hcldec.AttrSpec{Name: "packer_on_error", Type: cty.String, Required: false},
+		"packer_user_variables":      &hcldec.AttrSpec{Name: "packer_user_variables", Type: cty.Map(cty.String), Required: false},
+		"packer_sensitive_variables": &hcldec.AttrSpec{Name: "packer_sensitive_variables", Type: cty.List(cty.String), Required: false},
+		"output_path":                &hcldec.AttrSpec{Name: "output_path", Type: cty.String, Required: false},
+		"api_url":                    &hcldec.AttrSpec{Name: "api_url", Type: cty.String, Required: false},
+		"org_id":                     &hcldec.AttrSpec{Name: "org_id", Type: cty.String, Required: false},
+		"az":                         &hcldec.AttrSpec{Name: "az", Type: cty.String, Required: false},
+		"project_id":                 &hcldec.AttrSpec{Name: "project_id", Type: cty.String, Required: false},
+		"token":                      &hcldec.AttrSpec{Name: "token", Type: cty.String, Required: false},
+		"helper_image_url":           &hcldec.AttrSpec{Name: "helper_image_url", Type: cty.String, Required: false},
+		"helper_cpu":                 &hcldec.AttrSpec{Name: "helper_cpu", Type: cty.Number, Required: false},
+		"helper_memory":              &hcldec.AttrSpec{Name: "helper_memory", Type: cty.String, Required: false},
+		"helper_disk_size":           &hcldec.AttrSpec{Name: "helper_disk_size", Type: cty.String, Required: false},
+		"helper_ssh_username":        &hcldec.AttrSpec{Name: "helper_ssh_username", Type: cty.String, Required: false},
+		"disk_device":                &hcldec.AttrSpec{Name: "disk_device", Type: cty.String, Required: false},
+		"storage_class":              &hcldec.AttrSpec{Name: "storage_class", Type: cty.String, Required: false},
+		"subnet_eid":                 &hcldec.AttrSpec{Name: "subnet_eid", Type: cty.String, Required: false},
 	}
 	return s
 }

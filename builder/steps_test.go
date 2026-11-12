@@ -2,7 +2,10 @@ package builder
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,8 +15,10 @@ import (
 	"testing"
 
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
+	"github.com/hashicorp/packer-plugin-sdk/communicator"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+	"golang.org/x/crypto/ssh"
 )
 
 // Fake Superphenix: create -> eid i1; get -> Running + IP; call trace.
@@ -162,5 +167,18 @@ func TestCDURLBody(t *testing.T) {
 	}
 	if got.Advanced != nil {
 		t.Error("vm_type alone must not push advanced overrides")
+	}
+}
+
+func TestAuthorizedKeyFromPrivateKey(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	block, _ := ssh.MarshalPrivateKey(priv, "")
+	sp, _ := ssh.NewPublicKey(pub)
+	c := &communicator.Config{SSH: communicator.SSH{SSHPrivateKey: pem.EncodeToMemory(block)}}
+	if got, want := authorizedKey(c), string(ssh.MarshalAuthorizedKey(sp)); got != want {
+		t.Errorf("authorizedKey = %q, want %q", got, want)
+	}
+	if got := authorizedKey(&communicator.Config{}); got != "" {
+		t.Errorf("no key material: empty expected, got %q", got)
 	}
 }

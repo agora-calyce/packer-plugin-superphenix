@@ -36,7 +36,7 @@ Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storag
 Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, `boot_command`, `boot_wait` (typed over VNC; also with `source_url` for an image without cloud-init), ISO only: `iso_disk_size` ("8Gi"), `disk_bus` ("virtio", `sata` for Windows), `efi` (true), `secure_boot`, `tpm`, `http_content`/`http_directory`, `cd_url`/`cd_disk_size` (hosted answer-file ISO), `cd_files`/`cd_content`/`cd_label`. Communicator: `communicator = "ssh"` with the usual `ssh_*` settings (`ssh_username` defaults to `spx`; with a cloud image the plugin creates that user itself with passwordless sudo), or `communicator = "winrm"` with `winrm_username` and `winrm_password` (Windows).
 
 Post-processor: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, `output_path`,
-`helper_image_url` (any cloud-init Linux cloud image that can install `qemu-utils`; reusing the build image works).
+`helper_image_url` (any cloud-init Linux cloud image that can install `qemu-utils`; it must NOT be the build image: two disks with the same filesystem labels/UUIDs make the helper mount the wrong one).
 Optional: `helper_cpu` (2), `helper_memory` ("2Gi"), `helper_disk_size` ("30Gi", must exceed the produced image),
 `helper_ssh_username` (`spx`), `disk_device` (auto-detected; set only if detection fails).
 
@@ -61,7 +61,11 @@ variable "token" {
   sensitive = true
 }
 
-locals { image = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" }
+locals {
+  image = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  # Not the build image: two disks with the same labels/UUIDs make the helper mount the wrong one.
+  helper_image = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
+}
 
 source "superphenix" "ubuntu" {
   api_url       = var.api_url
@@ -90,7 +94,7 @@ build {
     token            = var.token
     subnet_eid       = var.subnet_eid
     storage_class    = "block-standard"
-    helper_image_url = local.image
+    helper_image_url = local.helper_image
     output_path      = "output/ubuntu.qcow2"
   }
 }

@@ -35,7 +35,7 @@ variable "az" { type = string }
 variable "project_id" { type = string }
 variable "subnet_eid" { type = string }
 variable "storage_class" { default = "block-standard" }
-# Build account created by the answer file (make-answer-iso.sh USERNAME; "Administrateur" suits a French ISO).
+# Build account created by the answer file (make-answer-iso.sh WIN_USERNAME; "Administrateur" suits a French ISO).
 variable "win_username" { default = "Administrateur" }
 
 source "superphenix" "win2025" {

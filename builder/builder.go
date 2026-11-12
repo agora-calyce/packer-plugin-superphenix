@@ -154,6 +154,9 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	if c.CDURL != "" && (c.ISOURL == "" || c.hasCD()) {
 		errs = append(errs, errors.New("cd_url needs iso_url and cannot be combined with cd_files/cd_content"))
 	}
+	if c.SecureBoot != nil && *c.SecureBoot && c.EFI != nil && !*c.EFI {
+		errs = append(errs, errors.New("secure_boot needs efi"))
+	}
 	if _, err := client.GiB(c.CDDiskSize); err != nil {
 		errs = append(errs, fmt.Errorf("cd_disk_size: %w", err))
 	}
@@ -210,9 +213,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		&stepCreate{},
 		&stepBootCommand{},
 		&stepWaitIP{},
-		&communicator.StepConnect{Config: &c.Comm, Host: func(s multistep.StateBag) (string, error) {
-			return s.Get("ip").(string), nil
-		}, SSHConfig: c.Comm.SSHConfigFunc(),
+		&communicator.StepConnect{Config: &c.Comm, Host: communicator.CommHost(c.Comm.Host(), "ip"), SSHConfig: c.Comm.SSHConfigFunc(),
 			WinRMConfig: func(multistep.StateBag) (*communicator.WinRMConfig, error) {
 				return &communicator.WinRMConfig{Username: c.Comm.WinRMUser, Password: c.Comm.WinRMPassword}, nil
 			}},
