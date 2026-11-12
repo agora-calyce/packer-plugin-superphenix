@@ -12,24 +12,10 @@ import (
 
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
 	"github.com/hashicorp/packer-plugin-sdk/bootcommand"
-	"github.com/hashicorp/packer-plugin-sdk/communicator"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
-	"golang.org/x/crypto/ssh"
 )
-
-// authorizedKey returns the public key to authorise on the VM. StepSSHKeyGen only fills SSHPublicKey for a
-// generated key pair: with ssh_private_key_file it is derived from the private key. Empty with ssh_password/agent.
-func authorizedKey(c *communicator.Config) string {
-	if len(c.SSHPublicKey) > 0 {
-		return string(c.SSHPublicKey)
-	}
-	if signer, err := ssh.ParsePrivateKey(c.SSHPrivateKey); err == nil {
-		return string(ssh.MarshalAuthorizedKey(signer.PublicKey()))
-	}
-	return ""
-}
 
 func fail(state multistep.StateBag, err error) multistep.StepAction {
 	state.Put("error", err)
@@ -66,7 +52,7 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 	}
 
 	if c.ISOURL == "" {
-		cloudInit, err := client.MergeUserData(client.UserCloudInit(c.Comm.SSHUsername, authorizedKey(&c.Comm)), c.UserData)
+		cloudInit, err := client.MergeUserData(client.UserCloudInit(c.Comm.SSHUsername, string(c.Comm.SSHPublicKey)), c.UserData)
 		if err != nil {
 			return fail(state, err)
 		}

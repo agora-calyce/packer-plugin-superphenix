@@ -26,7 +26,6 @@
 - Post-processor: the qcow2 is downloaded to `output_path.part` and renamed on success; a failed download no longer deletes a previous image.
 - Post-processor: Ctrl-C during a download resume now closes the new connection instead of finishing the whole download.
 - Builder: instance deletion retries 5xx/network errors (2 min); when it still fails, disks are no longer waited on for 10 minutes and the leftover IDs are reported.
-- Builder: with `source_url`, `ssh_private_key_file` authorises the matching public key; without any key (`ssh_password`) no empty `ssh_authorized_keys` entry is written.
 - Builder: `ssh_host` and `winrm_host` are honoured (the VM's private IP is only the default).
 - Builder: an explicit `efi = false` is sent to the API instead of being dropped when a `vm_type` is set.
 - Builder: the address served to the VM (cd.iso URL, `HTTPIP`) is always IPv4.

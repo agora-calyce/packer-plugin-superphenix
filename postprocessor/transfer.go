@@ -215,5 +215,6 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 	if err = f.Close(); err != nil {
 		return err
 	}
+	os.Remove(out) // Windows cannot rename over an existing file; -force was checked in Configure
 	return os.Rename(tmp, out)
 }

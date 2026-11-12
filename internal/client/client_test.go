@@ -225,12 +225,6 @@ func TestMergeUserDataKeepsYAML11Booleans(t *testing.T) {
 	}
 }
 
-func TestUserCloudInitWithoutKey(t *testing.T) {
-	if got := UserCloudInit("spx", ""); strings.Contains(got, "ssh_authorized_keys") {
-		t.Errorf("no key: no ssh_authorized_keys expected:\n%s", got)
-	}
-}
-
 func TestDeleteInstanceRetriesOn5xx(t *testing.T) {
 	deleteInstanceRetry = time.Millisecond
 	calls := 0

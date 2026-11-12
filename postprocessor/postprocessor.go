@@ -110,6 +110,12 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 	if _, err := client.GiBInt(c.HelperMemory); err != nil {
 		errs = append(errs, fmt.Errorf("helper_memory: %w", err))
 	}
+	if c.OutputPath != "" {
+		// At configure time: refusing after the build would waste a long ISO/Windows install.
+		if err := checkOutputFree(c.OutputPath, c.PackerForce); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if p.transfer == nil {
 		p.transfer = sshFetch
 	}
@@ -138,9 +144,6 @@ func (p *PostProcessor) PostProcess(ctx context.Context, ui packersdk.Ui, a pack
 	c := &p.config
 	// Before any resource is created: failing here costs less than after the export (already long for a Windows disk).
 	if err := ensureOutputDir(c.OutputPath); err != nil {
-		return nil, false, false, err
-	}
-	if err := checkOutputFree(c.OutputPath, c.PackerForce); err != nil {
 		return nil, false, false, err
 	}
 	api := client.New(c.APIURL, c.OrgID, c.AZ, c.ProjectID, c.Token)

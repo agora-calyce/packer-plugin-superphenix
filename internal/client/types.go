@@ -132,13 +132,8 @@ func UserCloudInit(user, authorizedKey string, packages ...string) string {
 	if len(packages) > 0 {
 		s += "packages: [" + strings.Join(packages, ", ") + "]\n"
 	}
-	s += "users:\n  - name: " + user + "\n    groups: sudo\n    shell: /bin/bash\n" +
-		"    sudo: ['ALL=(ALL) NOPASSWD:ALL']\n"
-	// No key (ssh_password, agent): an empty list item would be a null key; the password comes from user_data.
-	if k := strings.TrimSpace(authorizedKey); k != "" {
-		s += "    ssh_authorized_keys:\n      - " + k + "\n"
-	}
-	return s
+	return s + "users:\n  - name: " + user + "\n    groups: sudo\n    shell: /bin/bash\n" +
+		"    sudo: ['ALL=(ALL) NOPASSWD:ALL']\n    ssh_authorized_keys:\n      - " + strings.TrimSpace(authorizedKey) + "\n"
 }
 
 // GiB converts "20Gi" or "20" to "20": the API expects an integer in GiB, without unit (max 5000).
