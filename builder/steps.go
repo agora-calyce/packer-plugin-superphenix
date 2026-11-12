@@ -107,17 +107,15 @@ func (s *stepCreate) Run(ctx context.Context, state multistep.StateBag) multiste
 		// With a vm_type (e.g. windows.2k25) and no explicit option, the type sets EFI/Secure Boot/TPM.
 		if c.VMType == "" || c.EFI != nil || c.SecureBoot != nil || c.TPM != nil {
 			adv := &client.Advanced{}
-			if c.EFI == nil || *c.EFI {
-				// BIOS (SeaBIOS) only tries the hard disk: the CD-ROM is only booted with EFI. Tested: empty disk
-				// first (not bootable, EFI falls through to the CD), then the installed disk boots on its own after reboot.
-				adv.Firmware = &client.Firmware{Bootloader: client.Bootloader{EFI: client.EFI{Enabled: true, SecureBoot: c.SecureBoot != nil && *c.SecureBoot}}}
-			}
+			// BIOS (SeaBIOS) only tries the hard disk: the CD-ROM is only booted with EFI. Tested: empty disk
+			// first (not bootable, EFI falls through to the CD), then the installed disk boots on its own after reboot.
+			// An explicit efi = false is sent as such, otherwise the vm_type's own firmware would apply.
+			efi := c.EFI == nil || *c.EFI
+			adv.Firmware = &client.Firmware{Bootloader: client.Bootloader{EFI: client.EFI{Enabled: efi, SecureBoot: efi && c.SecureBoot != nil && *c.SecureBoot}}}
 			if c.TPM != nil {
 				adv.Devices = &client.Devices{TPM: client.TPM{Enabled: *c.TPM}}
 			}
-			if adv.Firmware != nil || adv.Devices != nil {
-				spec.Advanced = adv
-			}
+			spec.Advanced = adv
 		}
 	}
 	state.Put("disk_id", s.diskID)
@@ -162,7 +160,10 @@ func (s *stepCreate) Cleanup(state multistep.StateBag) {
 	// context.Background: the build ctx may already be cancelled.
 	if s.id != "" {
 		if err := api.DeleteInstance(context.Background(), s.id); err != nil && !client.IsNotFound(err) {
-			ui.Error("cleanup instance: " + err.Error())
+			// The VM is still there, so its disks stay mounted: waiting to delete them would only burn minutes.
+			ui.Error(fmt.Sprintf("cleanup instance: %v (instance %s and disks %v left behind, delete them by hand)",
+				err, s.id, []string{s.diskID, s.isoID, s.cdID}))
+			return
 		}
 	}
 	for _, d := range []string{s.diskID, s.isoID, s.cdID} {
@@ -247,7 +248,7 @@ func outboundIP(apiURL string) (string, error) {
 			port = "443"
 		}
 	}
-	conn, err := net.Dial("udp", net.JoinHostPort(u.Hostname(), port))
+	conn, err := net.Dial("udp4", net.JoinHostPort(u.Hostname(), port)) // IPv4: the VM only reports IPv4, and HTTPIP:HTTPPort needs no brackets
 	if err != nil {
 		return "", err
 	}

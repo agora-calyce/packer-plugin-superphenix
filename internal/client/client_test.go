@@ -214,3 +214,27 @@ func TestCreateInstanceMemoryFormat(t *testing.T) {
 		t.Fatalf("new API: single quantity request expected: %v %v", err, bodies)
 	}
 }
+
+func TestMergeUserDataKeepsYAML11Booleans(t *testing.T) {
+	got, err := MergeUserData(UserCloudInit("spx", "ssh-ed25519 AAAA"), "#cloud-config\nusers:\n  - name: bob\n    lock_passwd: no\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "lock_passwd: no\n") || strings.Count(got, "#cloud-config") != 1 {
+		t.Errorf("scalars must be kept as written, one header expected:\n%s", got)
+	}
+}
+
+func TestDeleteInstanceRetriesOn5xx(t *testing.T) {
+	deleteInstanceRetry = time.Millisecond
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls++; calls < 3 {
+			http.Error(w, "bad gateway", 502)
+		}
+	}))
+	defer srv.Close()
+	if err := New(srv.URL, "o", "az", "p", "t").DeleteInstance(context.Background(), "i"); err != nil || calls != 3 {
+		t.Fatalf("expected 3 calls without error, got %d calls, err=%v", calls, err)
+	}
+}

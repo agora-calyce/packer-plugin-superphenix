@@ -289,6 +289,8 @@ func (c *Client) WaitStopped(ctx context.Context, id string, every time.Duration
 // MergeUserData merges the user's cloud-config into the plugin's: `users` and `packages`
 // are concatenated (the plugin's SSH user is always created), the user's other keys
 // take precedence. Only the `#cloud-config` (YAML) format is accepted.
+// The merge works on YAML nodes, not on decoded values: cloud-init reads YAML 1.1, where `no`/`off` are
+// booleans, and a decode/encode round trip would turn them into the strings "no"/"off".
 func MergeUserData(base, userData string) (string, error) {
 	if strings.TrimSpace(userData) == "" {
 		return base, nil
@@ -296,28 +298,39 @@ func MergeUserData(base, userData string) (string, error) {
 	if !strings.HasPrefix(strings.TrimSpace(userData), "#cloud-config") {
 		return "", fmt.Errorf("user_data must start with #cloud-config (other formats are not supported)")
 	}
-	var b, u map[string]any
+	var b, u yaml.Node
 	if err := yaml.Unmarshal([]byte(base), &b); err != nil {
 		return "", err
 	}
 	if err := yaml.Unmarshal([]byte(userData), &u); err != nil {
 		return "", fmt.Errorf("user_data: %w", err)
 	}
-	if u == nil {
-		u = map[string]any{}
+	if len(u.Content) == 0 { // only the #cloud-config line
+		u = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
 	}
-	for _, k := range []string{"users", "packages"} {
-		bl, _ := b[k].([]any)
-		if v, ok := u[k]; ok {
-			ul, isList := v.([]any)
-			if !isList {
+	um, bm := u.Content[0], b.Content[0]
+	if um.Kind != yaml.MappingNode {
+		return "", errors.New("user_data: the cloud-config must be a YAML mapping")
+	}
+	for i := 0; i+1 < len(bm.Content); i += 2 {
+		k, bv := bm.Content[i].Value, bm.Content[i+1]
+		var uv *yaml.Node
+		for j := 0; j+1 < len(um.Content); j += 2 {
+			if um.Content[j].Value == k {
+				uv = um.Content[j+1]
+			}
+		}
+		switch {
+		case uv == nil:
+			um.Content = append(um.Content, bm.Content[i], bv)
+		case k == "users" || k == "packages":
+			if uv.Kind != yaml.SequenceNode {
 				return "", fmt.Errorf("user_data: %q must be a list", k)
 			}
-			u[k] = append(ul, bl...)
-		} else if bl != nil {
-			u[k] = bl
+			uv.Content = append(uv.Content, bv.Content...)
 		}
 	}
-	out, err := yaml.Marshal(u)
-	return "#cloud-config\n" + string(out), err
+	out, err := yaml.Marshal(&u)
+	// The user's #cloud-config line survives as a comment: keep exactly one.
+	return "#cloud-config\n" + strings.TrimPrefix(string(out), "#cloud-config\n"), err
 }

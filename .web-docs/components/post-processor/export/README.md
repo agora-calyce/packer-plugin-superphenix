@@ -14,7 +14,9 @@ through a short-lived helper VM:
 3. The post-processor waits for the helper's boot disk to be imported before starting the helper, then
    connects to its private IP, as the builder does.
 4. Over SSH, the helper runs `qemu-img convert -O qcow2` on the exported disk (detected automatically, or
-   `disk_device`), and the file is downloaded to `output_path`. An interrupted download is resumed.
+   `disk_device`), and the file is downloaded to `output_path`. An interrupted download is resumed. The file is
+   written as `output_path.part` and renamed on success, so a failed run never destroys a previous image.
+   An existing `output_path` is refused, before the build starts, unless Packer runs with `-force`.
 5. The helper and its disks are removed, including when a step fails or the build is cancelled.
 
 The built VM, the helper and the exported disk are all deleted at the end of the post-processor. Only the
@@ -26,6 +28,9 @@ Set `helper_disk_size` larger than the converted image (a Windows disk needs wel
 
 The export is validated on a VM built from a cloud image and on ISO builds (Ubuntu Server 26.04: 6 GB file,
 Windows Server 2025: 12 GB file). Booting an exported qcow2 is not tested.
+
+~> **Helper image:** `helper_image_url` must not be the image the builder used. The helper would boot with two
+disks sharing the same filesystem labels and UUIDs and could mount the exported disk instead of its own.
 
 ~> **Disk space:** the machine running Packer needs free space for the qcow2. The post-processor checks the
 free space of the `output_path` volume before the download and fails with a clear message if it is too small
@@ -54,7 +59,9 @@ through cloud-init and pinned for the download: no other host is trusted.
 - `token` (string) - API token. Pass it through a sensitive variable.
 
 - `helper_image_url` (string) - URL of a Linux cloud image used for the helper VM. It must provide
-  cloud-init and allow installing `qemu-utils` from its package manager.
+  cloud-init and allow installing `qemu-utils` from its package manager. It must
+  not be the image the builder used: two disks with the same filesystem labels
+  and UUIDs make the helper mount the exported disk instead of its own.
 
 - `storage_class` (string) - Storage class of the helper's boot disk, for example `block-standard`.
 
@@ -96,7 +103,7 @@ post-processor "superphenix-export" {
   token      = var.token
 
   output_path      = "output/ubuntu.qcow2"
-  helper_image_url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  helper_image_url = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2" # not the build image
   subnet_eid       = var.subnet_eid
   storage_class    = "block-standard"
 }

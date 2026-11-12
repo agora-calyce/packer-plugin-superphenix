@@ -1,8 +1,8 @@
 #!/bin/sh
 # Generates the answer-file ISO (autounattend.xml) to host, then pass as the builder's `cd_url`.
 # Usage : PASSWORD=... BOOTSTRAP_URL=http://RUNNER_IP:8080 ./make-answer-iso.sh out.iso
-# Variables: LOCALE (fr-FR), USERNAME (Administrateur), PASSWORD (required, throwaway: reuse it in winrm_password),
-#   HOSTNAME (windows-build), TIMEZONE (Romance Standard Time), IMAGE_KEY (/IMAGE/NAME or /IMAGE/INDEX),
+# Variables: LOCALE (fr-FR), WIN_USERNAME (Administrateur), PASSWORD (required, throwaway: reuse it in winrm_password),
+#   WIN_HOSTNAME (windows-build), TIMEZONE (Romance Standard Time), IMAGE_KEY (/IMAGE/NAME or /IMAGE/INDEX),
 #   IMAGE_VALUE (Windows Server 2025 SERVERSTANDARD), PRODUCT_KEY (empty = no key),
 #   BOOTSTRAP_URL (required: Packer's HTTP server, http://RUNNER_IP:8080 with the runner's private IP in
 #   your subnet and the template's http_port_min).
@@ -20,8 +20,8 @@ def need(k):
     return e[k]
 key = e.get("PRODUCT_KEY", "")
 vals = {
-    "LOCALE": e.get("LOCALE", "fr-FR"), "USERNAME": e.get("USERNAME", "Administrateur"), "PASSWORD": need("PASSWORD"),
-    "HOSTNAME": e.get("HOSTNAME", "windows-build"), "TIMEZONE": e.get("TIMEZONE", "Romance Standard Time"),
+    "LOCALE": e.get("LOCALE", "fr-FR"), "USERNAME": e.get("WIN_USERNAME", "Administrateur"), "PASSWORD": need("PASSWORD"),
+    "HOSTNAME": e.get("WIN_HOSTNAME", "windows-build"), "TIMEZONE": e.get("TIMEZONE", "Romance Standard Time"),
     "IMAGE_KEY": e.get("IMAGE_KEY", "/IMAGE/NAME"), "IMAGE_VALUE": e.get("IMAGE_VALUE", "Windows Server 2025 SERVERSTANDARD"),
     "BOOTSTRAP_URL": need("BOOTSTRAP_URL"),
     "PRODUCT_KEY_XML": "<ProductKey><Key>%s</Key><WillShowUI>OnError</WillShowUI></ProductKey>" % escape(key) if key else "",

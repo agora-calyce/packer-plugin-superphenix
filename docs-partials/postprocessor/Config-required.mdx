@@ -13,7 +13,9 @@
 - `token` (string) - API token. Pass it through a sensitive variable.
 
 - `helper_image_url` (string) - URL of a Linux cloud image used for the helper VM. It must provide
-  cloud-init and allow installing `qemu-utils` from its package manager.
+  cloud-init and allow installing `qemu-utils` from its package manager. It must
+  not be the image the builder used: two disks with the same filesystem labels
+  and UUIDs make the helper mount the exported disk instead of its own.
 
 - `storage_class` (string) - Storage class of the helper's boot disk, for example `block-standard`.
 

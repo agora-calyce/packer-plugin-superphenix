@@ -107,11 +107,13 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 	if err != nil {
 		return err
 	}
-	// Ctrl-C: closing the connection interrupts ongoing sessions and download.
-	// ponytail: reads cli without a lock; a race with reconnection is theoretical (worst case, late close).
-	stop := context.AfterFunc(ctx, func() { cli.Close() })
+	// Ctrl-C: closing the current connection interrupts ongoing sessions and download. AfterFunc fires once, so a
+	// connection opened by a resume after the cancellation is closed by the ctx check below.
+	var cur atomic.Pointer[ssh.Client]
+	cur.Store(cli)
+	stop := context.AfterFunc(ctx, func() { cur.Load().Close() })
 	defer stop()
-	defer func() { cli.Close() }()
+	defer func() { cur.Load().Close() }()
 
 	run := func(cmd string) ([]byte, error) {
 		s, err := cli.NewSession()
@@ -163,14 +165,16 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 			out, size, free, filepath.Dir(out))
 	}
 
-	f, err := os.Create(out)
+	// Download to a temporary file renamed on success: a failed run never destroys a previous qcow2 at out.
+	tmp := out + ".part"
+	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		f.Close()
 		if err != nil {
-			os.Remove(out) // no partial qcow2
+			os.Remove(tmp) // no partial qcow2
 		}
 	}()
 	lw := &localWriter{w: f}
@@ -188,6 +192,11 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 				return cerr
 			}
 			cli = nc
+			cur.Store(nc)
+			if ctx.Err() != nil {
+				nc.Close()
+				return fmt.Errorf("download qcow2: %w", ctx.Err())
+			}
 		}
 		perr := pull(cli, lw, got)
 		if lw.err != nil {
@@ -203,5 +212,9 @@ func sshFetch(ctx context.Context, ui packersdk.Ui, host, user string, signer ss
 			continue
 		}
 	}
-	return nil
+	if err = f.Close(); err != nil {
+		return err
+	}
+	os.Remove(out) // Windows cannot rename over an existing file; -force was checked in Configure
+	return os.Rename(tmp, out)
 }
