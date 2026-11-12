@@ -1,6 +1,3 @@
-
-# Superphenix Export Post-Processor
-
 Type: `superphenix-export`
 Artifact BuilderId: `agora-calyce.superphenix.export`
 

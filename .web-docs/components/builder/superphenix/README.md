@@ -1,6 +1,3 @@
-
-# Superphenix Builder
-
 Type: `superphenix`
 Artifact BuilderId: `agora-calyce.superphenix`
 
@@ -431,7 +428,7 @@ of the installer must create that account and enable WinRM (see the Windows guid
   
   NOTE: If using an Amazon EBS builder, you can specify the interface
   WinRM connects to via
-  [`ssh_interface`](/packer/plugins/builders/amazon/ebs#ssh_interface)
+  [`ssh_interface`](/packer/integrations/agora-calyce/amazon/latest/components/builder/ebs#ssh_interface)
 
 - `winrm_no_proxy` (bool) - Setting this to `true` adds the remote
   `host:port` to the `NO_PROXY` environment variable. This has the effect of
