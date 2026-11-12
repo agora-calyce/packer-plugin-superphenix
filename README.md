@@ -81,7 +81,6 @@ Reference documentation:
 - `memory`, `disk_size` and the other sizes are whole GiB, written `4Gi` or `4` (other units and fractions are
   rejected). Since Superphenix 0.10 the API takes `memory` as a quantity (`"4Gi"`); the plugin sends that and
   falls back to the bare integer on an older API. Disk sizes are still sent as bare integers.
-- Tested with one API version and one AZ (`fr01-als01`).
 
 ## Development
 
