@@ -147,7 +147,8 @@ post-processor "superphenix-export" {
 
 The export is validated on a VM built from a cloud image, and on VMs built from an ISO (Ubuntu Server 26.04: 6 GB
 qcow2, 23 minutes with the export; Windows Server 2025). A disk built from an ISO holds an EFI system, so boot the
-qcow2 with UEFI. The Packer machine
+qcow2 with UEFI. `helper_image_url` must not be the image the build used (the helper would see two disks with the same
+labels and UUIDs), and an existing `output_path` is refused unless Packer runs with `-force`. The Packer machine
 needs free disk space for the qcow2 (the size of the used data, for example about 13 GB for Windows Server 2025). The plugin checks it before the download and stops with a clear message if it is not enough.
 
 ## Troubleshooting
@@ -160,6 +161,7 @@ needs free disk space for the qcow2 (the size of the used data, for example abou
 | Build SSH timeout | The runner cannot reach the VM's private IP (outside the subnet/VPN), or the answer file did not create the SSH user / enable password SSH. |
 | ISO build: SSH timeout and no installer activity | Look at the VM's console (VNC) before changing anything. The GRUB key sequence of `boot_command` is timing sensitive: one Ubuntu 26.04 run timed out after 40 minutes with no explanation, and the identical run succeeded right after. Retry once, then check the screen. |
 | `ssh to helper <ip>: ...` | Same, for the export helper. |
+| `output_path ... already exists` | Remove the file or run `packer build -force`. |
 | `not enough free space for ...` | The volume of `output_path` cannot hold the qcow2. Free space or point `output_path` to a larger volume. |
 | Helper never gets `qemu-img` | The subnet needs Internet access to the distribution mirrors. |
 | `memory: ...` / `disk_size: ...` error | Whole GiB values like `"4Gi"`. |

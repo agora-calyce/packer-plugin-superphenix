@@ -21,8 +21,8 @@ through a short-lived helper VM:
    connects to its private IP, as the builder does.
 4. Over SSH, the helper runs `qemu-img convert -O qcow2` on the exported disk (detected automatically, or
    `disk_device`), and the file is downloaded to `output_path`. An interrupted download is resumed. The file is
-written as `output_path.part` and renamed on success, so a failed run never destroys a previous image.
-An existing `output_path` is refused unless Packer runs with `-force`.
+   written as `output_path.part` and renamed on success, so a failed run never destroys a previous image.
+   An existing `output_path` is refused, before the build starts, unless Packer runs with `-force`.
 5. The helper and its disks are removed, including when a step fails or the build is cancelled.
 
 The built VM, the helper and the exported disk are all deleted at the end of the post-processor. Only the

@@ -4,7 +4,6 @@
 
 ### Breaking changes
 - `superphenix-export`: removed `eip_eid` and `runner_cidr` (Packer reports them as unknown arguments). EIP exposure is no longer supported: Packer must run inside the Superphenix subnet, or behind a VPN, to reach the helper's private IP, as it already does for the builder.
-
 - `superphenix-export`: an existing `output_path` is refused unless Packer runs with `-force`. `helper_image_url` must no longer be the build image (duplicate labels/UUIDs make the helper mount the wrong disk): the examples and docs now use a Debian image for the helper.
 - `make-answer-iso.sh`: the environment variables `USERNAME` and `HOSTNAME` are renamed `WIN_USERNAME` and `WIN_HOSTNAME` (the old names were often already set by `sudo`, Docker or the desktop session).
 - Builder: `secure_boot = true` with `efi = false` is rejected.
