@@ -1,5 +1,3 @@
-# Plugin goreleaser configuration, INACTIVE while it stays in release/ (see release/README.md).
-# To enable it: move it to the repository root as `.goreleaser.yml`.
 # Based on the HashiCorp template (packer-plugin-scaffolding), adapted: the version lives in the `main` package.
 version: 2
 

@@ -1,5 +1,3 @@
-# Continuous integration, INACTIVE while it stays in release/ (see release/README.md).
-# To enable it: move it to .github/workflows/ci.yml.
 name: ci
 
 on:
