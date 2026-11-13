@@ -49,4 +49,11 @@
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
+- `winrm_final_username` (string) - WinRM builds: name of the administrator account created once the provisioners are done. The build account
+  (`winrm_username`, created by the answer file) is then deleted at the first boot of the image, so the image
+  keeps only this account. Needs `winrm_final_password`. Leave both empty to keep the build account.
+
+- `winrm_final_password` (string) - Password of `winrm_final_username`. Pass it through a sensitive variable. It is never written to the
+  image in clear text and is masked in the logs.
+
 <!-- End of code generated from the comments of the Config struct in builder/builder.go; -->

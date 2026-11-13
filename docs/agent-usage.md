@@ -24,7 +24,7 @@ The post-processor needs the builder artifact; it cannot be used with another bu
    URL of an installer ISO; Superphenix downloads it, so no local path and no `iso_checksum`). ISO installs
    are only tested with Ubuntu Server 26.04 (see "ISO installs" below). Superphenix downloads every URL
    itself (`source_url`, `iso_url`, `cd_url`, `helper_image_url`): they must be reachable from Superphenix.
-3. **Windows works with `cd_url`; read `docs/windows.md` first** (validated with Windows Server 2025 FR, about 37 min, 43 min with the qcow2 export; booting the exported qcow2 is not tested). Superphenix imports disks from a URL it can reach, not from the runner's private IP, so a generated ISO (`cd_files`/`cd_content`) cannot be imported from a private runner. Use `cd_url` with a hosted answer-file ISO (`example/windows/answer-iso/make-answer-iso.sh`); the WinRM bootstrap is then fetched from Packer's HTTP server (`http_directory`). The Windows installer has no curl/PowerShell and an AZERTY keyboard on French ISOs. `floppy_*` is not supported.
+3. **Windows works with `cd_url`; read `docs/windows.md` first** (validated with Windows Server 2025 FR, about 37 min, 43 min with the qcow2 export; booting the exported qcow2 is not tested). Superphenix imports disks from a URL it can reach, not from the runner's private IP, so a generated ISO (`cd_files`/`cd_content`) cannot be imported from a private runner. Use `cd_url` with a hosted answer-file ISO (`example/windows/answer-iso/make-answer-iso.sh`); the ISO carries the WinRM bootstrap, so it does not depend on the runner (no `BOOTSTRAP_URL`, no `http_*`, no security group rule) and serves any runner. Set `winrm_final_username`/`winrm_final_password` to get your own admin account: the build account (`packer`, throwaway password) is deleted at the image's first boot. The Windows installer has no curl/PowerShell and an AZERTY keyboard on French ISOs. `floppy_*` is not supported.
 4. **Sizes are whole GiB**: `memory = "4Gi"` or `"4"`, `disk_size = "20Gi"` or `"20"` (1 to 5000). No `4096Mi`, `4G`, `1.5Gi`: they are rejected. The plugin sends `memory` as `"4Gi"` to Superphenix 0.10+ and as a bare number to older versions.
 5. The token is a secret: pass it with `variable "token" { sensitive = true }` fed by `PKR_VAR_token`
    (masked CI variable). Never write it in a template, a log, a commit or a message.
@@ -33,7 +33,7 @@ The post-processor needs the builder artifact; it cannot be used with another bu
 ## Required arguments
 
 Builder: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, and one of `source_url` / `iso_url`.
-Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, `boot_command`, `boot_wait` (typed over VNC; also with `source_url` for an image without cloud-init), ISO only: `iso_disk_size` ("8Gi"), `disk_bus` ("virtio", `sata` for Windows), `efi` (true), `secure_boot`, `tpm`, `http_content`/`http_directory`, `cd_url`/`cd_disk_size` (hosted answer-file ISO), `cd_files`/`cd_content`/`cd_label`. Communicator: `communicator = "ssh"` with the usual `ssh_*` settings (`ssh_username` defaults to `spx`; with a cloud image the plugin creates that user itself with passwordless sudo), or `communicator = "winrm"` with `winrm_username` and `winrm_password` (Windows).
+Optional: `cpu` (2), `memory` ("4Gi"), `disk_size` ("20Gi"), `vm_type`, `user_data`, `boot_command`, `boot_wait` (typed over VNC; also with `source_url` for an image without cloud-init), ISO only: `iso_disk_size` ("8Gi"), `disk_bus` ("virtio", `sata` for Windows), `efi` (true), `secure_boot`, `tpm`, `http_content`/`http_directory`, `cd_url`/`cd_disk_size` (hosted answer-file ISO), `cd_files`/`cd_content`/`cd_label`. Communicator: `communicator = "ssh"` with the usual `ssh_*` settings (`ssh_username` defaults to `spx`; with a cloud image the plugin creates that user itself with passwordless sudo), or `communicator = "winrm"` with `winrm_username` and `winrm_password` (Windows); `winrm_final_username` + `winrm_final_password` (together, WinRM only, `sensitive`) create your own administrator after the provisioners and delete the build account at the image's first boot.
 
 Post-processor: `api_url`, `org_id`, `az`, `project_id`, `token`, `subnet_eid`, `storage_class`, `output_path`,
 `helper_image_url` (any cloud-init Linux cloud image that can install `qemu-utils`; it must NOT be the build image: two disks with the same filesystem labels/UUIDs make the helper mount the wrong one).
@@ -118,7 +118,7 @@ build {
 | `floppy_*` | not supported |
 | `shutdown_command` | drop (the plugin stops the VM through the API) |
 | `ssh_*` | keep `communicator = "ssh"` and `ssh_username`; with a cloud image the plugin authorizes a generated key (no password); with an ISO your answer file creates the user |
-| `winrm_*` | keep `communicator = "winrm"`; the answer file must create the account and enable WinRM |
+| `winrm_*` | keep `communicator = "winrm"`; the answer file must create the account and enable WinRM; `winrm_final_*` replaces the build account at the end |
 | none | add `subnet_eid`, `storage_class`, `api_url`, `org_id`, `az`, `project_id`, `token` |
 
 Provisioners (`shell`, `file`, `ansible`...) and other post-processors work unchanged. Update CI: replace

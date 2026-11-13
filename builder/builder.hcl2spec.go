@@ -103,6 +103,8 @@ type FlatConfig struct {
 	SubnetEID                 *string           `mapstructure:"subnet_eid" required:"true" cty:"subnet_eid" hcl:"subnet_eid"`
 	UserData                  *string           `mapstructure:"user_data" cty:"user_data" hcl:"user_data"`
 	VMType                    *string           `mapstructure:"vm_type" cty:"vm_type" hcl:"vm_type"`
+	FinalUsername             *string           `mapstructure:"winrm_final_username" cty:"winrm_final_username" hcl:"winrm_final_username"`
+	FinalPassword             *string           `mapstructure:"winrm_final_password" cty:"winrm_final_password" hcl:"winrm_final_password"`
 }
 
 // FlatMapstructure returns a new FlatConfig.
@@ -210,6 +212,8 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"subnet_eid":                   &hcldec.AttrSpec{Name: "subnet_eid", Type: cty.String, Required: false},
 		"user_data":                    &hcldec.AttrSpec{Name: "user_data", Type: cty.String, Required: false},
 		"vm_type":                      &hcldec.AttrSpec{Name: "vm_type", Type: cty.String, Required: false},
+		"winrm_final_username":         &hcldec.AttrSpec{Name: "winrm_final_username", Type: cty.String, Required: false},
+		"winrm_final_password":         &hcldec.AttrSpec{Name: "winrm_final_password", Type: cty.String, Required: false},
 	}
 	return s
 }

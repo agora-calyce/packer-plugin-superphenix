@@ -2,8 +2,8 @@
 """Validate an autounattend.xml, or an answer-file ISO that contains one, before using it as `cd_url`.
 
 Usage:
-  validate-answer-iso.py answers.iso|autounattend.xml [--username Administrateur] [--bootstrap-url http://RUNNER_IP:8080]
-  WINRM_PASSWORD=... validate-answer-iso.py answers.iso --username Administrateur
+  validate-answer-iso.py answers.iso|autounattend.xml [--username packer]
+  WINRM_PASSWORD=... validate-answer-iso.py answers.iso --username packer
 
 Checks the file offline (an ISO needs xorriso): it must be well-formed, have the passes and settings the
 Packer build relies on (UEFI disk layout, an image to install, EULA, a build account, a way to enable WinRM)
@@ -61,7 +61,6 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file")
     ap.add_argument("--username", help="winrm_username of the template")
-    ap.add_argument("--bootstrap-url", help="Packer HTTP server (http://<runner ip>:<port>) to check from here")
     a = ap.parse_args()
     password = os.environ.get("WINRM_PASSWORD")
 
@@ -117,7 +116,7 @@ def main():
         if auto is None or text(auto, "u:Enabled").lower() != "true":
             err("AutoLogon must be enabled: FirstLogonCommands (the WinRM bootstrap) only run after a logon")
         else:
-            if names and text(auto, "u:Username") not in names + ["Administrator", "Administrateur"]:
+            if names and text(auto, "u:Username") not in names + ["Administrator", "packer"]:
                 warn("AutoLogon user %s is not one of the LocalAccounts (%s)" % (text(auto, "u:Username"), ", ".join(names)))
         if oobe.find("u:OOBE", NS) is None:
             warn("no <OOBE> block: Windows may stop at the first-run screens (set HideEULAPage, ProtectYourPC, ...)")
@@ -126,15 +125,11 @@ def main():
             err("no FirstLogonCommands: nothing enables WinRM, Packer would wait for it until it times out")
         elif not any(re.search(r"winrm|PSRemoting|windows-initialisation", c, re.I) for c in cmds):
             warn("no FirstLogonCommand mentions WinRM: make sure something enables it (and opens the firewall)")
-        for c in cmds:
-            m = re.search(r"https?://[^'\" ]+", c)
-            if m:
-                print("info: bootstrap URL in the file: %s" % m.group(0))
         for p in re.findall(r"<PlainText>(\w+)</PlainText>", raw):
             if p.lower() == "true":
-                warn("passwords are stored in clear text: treat the ISO as a secret and host it at an unguessable URL")
+                warn("passwords are stored in clear text: fine for a throwaway build password (the plugin's winrm_final_username replaces the account), never put a real one in the ISO")
                 break
-        if a.username and a.username not in names + (["Administrator", "Administrateur"] if admin_pwd else []):
+        if a.username and a.username not in names + (["Administrator", "packer"] if admin_pwd else []):
             err("winrm_username %s is not a LocalAccount of the file (%s)" % (a.username, ", ".join(names) or "none"))
         if password:
             known = [v for v in list(pwds.values()) + [admin_pwd, text(auto, "u:Password/u:Value") if auto is not None else ""] if v]
@@ -143,13 +138,6 @@ def main():
             elif not a.username and password not in known:
                 err("WINRM_PASSWORD matches no password in the file")
 
-    if a.bootstrap_url:
-        url = a.bootstrap_url.rstrip("/") + "/windows-initialisation.ps1"
-        try:
-            urllib.request.urlopen(url, timeout=5).read(1)
-            print("info: %s is reachable from this machine" % url)
-        except Exception as e:
-            warn("%s is not reachable from this machine (%s): run the check from the runner, with Packer's HTTP server up" % (url, e))
     return report()
 
 

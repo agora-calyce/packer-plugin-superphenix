@@ -97,6 +97,13 @@ type Config struct {
 	UserData string `mapstructure:"user_data"`
 	// VM type (size preset), if your AZ defines some.
 	VMType string `mapstructure:"vm_type"`
+	// WinRM builds: name of the administrator account created once the provisioners are done. The build account
+	// (`winrm_username`, created by the answer file) is then deleted at the first boot of the image, so the image
+	// keeps only this account. Needs `winrm_final_password`. Leave both empty to keep the build account.
+	FinalUsername string `mapstructure:"winrm_final_username"`
+	// Password of `winrm_final_username`. Pass it through a sensitive variable. It is never written to the
+	// image in clear text and is masked in the logs.
+	FinalPassword string `mapstructure:"winrm_final_password"`
 }
 
 func (c *Config) hasCD() bool { return len(c.CDFiles) > 0 || len(c.CDContent) > 0 }
@@ -173,6 +180,18 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	if _, err := client.MergeUserData("#cloud-config\n", c.UserData); err != nil {
 		errs = append(errs, err)
 	}
+	if (c.FinalUsername == "") != (c.FinalPassword == "") {
+		errs = append(errs, errors.New("winrm_final_username and winrm_final_password go together"))
+	}
+	if c.FinalUsername != "" {
+		if c.Comm.Type != "winrm" {
+			errs = append(errs, errors.New("winrm_final_username needs communicator = \"winrm\""))
+		}
+		if c.FinalUsername == c.Comm.WinRMUser {
+			errs = append(errs, errors.New("winrm_final_username must differ from winrm_username (the build account is deleted)"))
+		}
+		packersdk.LogSecretFilter.Set(c.FinalPassword)
+	}
 	for _, e := range c.Comm.Prepare(&interpolate.Context{}) {
 		errs = append(errs, e)
 	}
@@ -218,6 +237,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 				return &communicator.WinRMConfig{Username: c.Comm.WinRMUser, Password: c.Comm.WinRMPassword}, nil
 			}},
 		&commonsteps.StepProvision{},
+		stepFinalizeWindows{},
 		&stepStop{},
 		&stepDropISO{},
 	)
