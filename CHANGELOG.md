@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1 - 2026-11-13
+
+### Breaking changes
+- Windows answer-file ISO: `BOOTSTRAP_URL` is removed. The WinRM bootstrap is on the ISO, so it no longer depends on the runner (no IP, port or security group rule; `http_directory`/`http_port_*` are no longer needed for Windows). `make-answer-iso.sh` variables are all optional; `WIN_USERNAME` now defaults to `packer` and `PASSWORD` to a throwaway `Packer-build-1`. Regenerate your ISOs, and set `winrm_username`/`winrm_password` to match.
+
+### Security
+- Windows: with `winrm_final_username`, the image no longer keeps the build account, its auto-logon password (Winlogon registry) or the unencrypted Basic WinRM: all are removed at the first boot of a deployed VM.
+
+### Added
+- Builder: `winrm_final_username` / `winrm_final_password` (WinRM): after the provisioners the plugin creates this administrator account, removes the auto-logon password and schedules the deletion of the build account (and its logon-screen entry) at the image's first boot. Validated on Windows Server 2025 (French ISO), without the export.
+- Docs and example: `example/windows` uses the final account; the answer-file ISO is runner-independent and can be customized (`LOCALE`, `TIMEZONE`, `IMAGE_*`, ...) at generation time.
+
 ## 0.1.0 - 2026-11-12
 
 ### Breaking changes

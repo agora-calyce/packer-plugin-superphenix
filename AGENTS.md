@@ -14,7 +14,7 @@ post-processor `superphenix-export` (qcow2 export). Built for CI.
 | Path | Role |
 |---|---|
 | `main.go` | Plugin registration. |
-| `builder/` | Builder: `builder.go` (config, `Prepare`, steps list), `steps.go` (create VM/disks, boot command, wait IP, stop, drop ISO and CD disks). |
+| `builder/` | Builder: `builder.go` (config, `Prepare`, steps list), `steps.go` (create VM/disks, boot command, wait IP, stop, drop ISO and CD disks), `finalize.go` (WinRM final account, build account removal). |
 | `postprocessor/` | Export: `postprocessor.go` (helper VM flow, deferred cleanup), `transfer.go` (SSH conversion + resumable download). |
 | `internal/client/` | Hand-written Superphenix HTTP client (no public Go SDK); `vnc.go` is a minimal RFB keyboard client. |
 | `docs/` | Reference docs (`.mdx`), user guides (`linux.md`, `windows.md`) and agent guide: written by hand. |

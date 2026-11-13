@@ -118,8 +118,8 @@
          </AutoLogon>
          <FirstLogonCommands>
             <SynchronousCommand wcm:action="add">
-               <CommandLine>%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force; $ok=$false; for($i=0;$i -lt 120 -and -not $ok;$i++){ try { Invoke-Expression ((New-Object Net.WebClient).DownloadString('@BOOTSTRAP_URL@/windows-initialisation.ps1')); $ok=$true } catch { Start-Sleep 5 } }"</CommandLine>
-               <Description>Bootstrap WinRM from the Packer HTTP server</Description>
+               <CommandLine>%SystemRoot%\system32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force; $f = $null; for($i=0;$i -lt 24 -and -not $f;$i++){ $f = Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root 'windows-initialisation.ps1' } | Where-Object { Test-Path $_ } | Select-Object -First 1; if(-not $f){ Start-Sleep 5 } }; Invoke-Expression (Get-Content -Raw $f)"</CommandLine>
+               <Description>Bootstrap WinRM from the script on this ISO</Description>
                <Order>1</Order>
                <RequiresUserInput>false</RequiresUserInput>
             </SynchronousCommand>

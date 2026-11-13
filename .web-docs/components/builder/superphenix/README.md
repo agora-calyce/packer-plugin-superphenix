@@ -113,6 +113,13 @@ alphabetized.
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
+- `winrm_final_username` (string) - WinRM builds: name of the administrator account created once the provisioners are done. The build account
+  (`winrm_username`, created by the answer file) is then deleted at the first boot of the image, so the image
+  keeps only this account. Needs `winrm_final_password`. Leave both empty to keep the build account.
+
+- `winrm_final_password` (string) - Password of `winrm_final_username`. Pass it through a sensitive variable. It is never written to the
+  image in clear text and is masked in the logs.
+
 <!-- End of code generated from the comments of the Config struct in builder/builder.go; -->
 
 
@@ -276,7 +283,10 @@ cloud-init replaces the default one of Superphenix. With `iso_url`, the answer f
 the user (see `user_data`).
 
 **WinRM** (Windows). Set `communicator = "winrm"` with `winrm_username` and `winrm_password`: the answer file
-of the installer must create that account and enable WinRM (see the Windows guide).
+of the installer must create that account and enable WinRM (see the Windows guide). To leave a clean image, also set
+`winrm_final_username` and `winrm_final_password` (both, WinRM only): once the provisioners are done the plugin creates
+that administrator and schedules the removal of the build account (`winrm_username`) and of the unencrypted Basic
+authentication at the first boot of a VM deployed from the image.
 
 <!-- Code generated from the comments of the Config struct in communicator/config.go; DO NOT EDIT MANUALLY -->
 
@@ -537,16 +547,14 @@ source "superphenix" "win2025" {
   memory    = "8Gi"
   disk_size = "50Gi"
 
-  http_directory = "${path.root}/scripts"  # serves the WinRM bootstrap to the VM
-  http_port_min  = 8080
-  http_port_max  = 8080
-
   boot_wait    = "5s"
   boot_command = ["<spacebar><wait3><spacebar><wait3><spacebar><wait3><spacebar><wait3><enter>"]
 
   communicator   = "winrm"
-  winrm_username = "Administrateur"
+  winrm_username = "packer"          # build account created by the answer-file ISO
   winrm_password = var.win_password
+  winrm_final_username = "ops"       # created after the provisioners; the build account is deleted at the image's first boot
+  winrm_final_password = var.final_password
   winrm_use_ssl  = false
   winrm_insecure = true
   winrm_timeout  = "2h"

@@ -18,29 +18,26 @@ shape the design on Superphenix:
    file, and the keyboard follows the ISO language (AZERTY on a French ISO), which makes typing files over the
    VNC console impractical.
 
-So the build uses two ISOs and one HTTP server:
+So the build uses two ISOs, and nothing from the runner is needed to start it:
 
 ```
 Windows ISO (iso_url)  ─┐  imported by Superphenix from a public URL
 Answer-file ISO (cd_url)┘  static autounattend.xml, imported from a URL you host once
         │ installs Windows, creates the build account, logs in
         ▼
-first logon: PowerShell downloads windows-initialisation.ps1 from the Packer HTTP server (the runner,
-reached over the private subnet), which enables WinRM
+first logon: PowerShell runs windows-initialisation.ps1, which sits on the answer-file ISO, and enables WinRM
         ▼
-Packer connects over WinRM, runs the provisioners, stops the VM
+Packer connects over WinRM (runner to VM), runs the provisioners, then the plugin creates your final
+account (winrm_final_username) and schedules the removal of the build account, then stops the VM
 ```
 
-Everything that changes between builds (scripts, provisioners) comes from the runner. The answer-file ISO is
-static: you rebuild and re-host it only when the image, the language, the build password or the runner address
-change.
+The answer-file ISO does not depend on the runner: no IP, no port, no security group rule. The same ISO serves
+any runner. Everything that changes between builds (scripts, provisioners, the final account) goes over WinRM.
+You rebuild and re-host the ISO only when the image, the language, the time zone or the build account change.
 
 ## Prerequisites
 
 - Packer runs on a VM **inside the subnet** (or behind a VPN), as for any build.
-- A security group lets the build VM reach the runner on the Packer HTTP port: **TCP `http_port_min`
-  (for example 8080) into the runner, from the subnet CIDR**. Without it the bootstrap fails and Packer waits
-  for WinRM until it times out.
 - Free disk space on the runner for the exported qcow2 (about 13 GB for Windows Server 2025), if you use the
   export.
 - A Windows ISO that Superphenix can download (`iso_url`).
@@ -53,8 +50,6 @@ change.
 small ISO (a few hundred KB):
 
 ```sh
-PASSWORD='<throwaway build password>' \
-BOOTSTRAP_URL=http://RUNNER_IP:8080 \
 LOCALE=fr-FR \
 IMAGE_VALUE='Windows Server 2025 SERVERSTANDARD' \
 sh example/windows/answer-iso/make-answer-iso.sh answers-win2025-fr.iso
@@ -62,9 +57,8 @@ sh example/windows/answer-iso/make-answer-iso.sh answers-win2025-fr.iso
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PASSWORD` | required | Password of the build account (also the local Administrator). Use the **same value** as `winrm_password` in the template. |
-| `BOOTSTRAP_URL` | required | Packer HTTP server as the VM sees it: `http://<runner private IP>:<http_port_min>`. |
-| `WIN_USERNAME` | `Administrateur` | Build account. Must match `winrm_username`. Use `Administrator` on an English ISO. |
+| `PASSWORD` | `Packer-build-1` | Password of the build account (also the local Administrator). A throwaway: the same value as `winrm_password` in the template (its default). |
+| `WIN_USERNAME` | `packer` | Build account, a local administrator that does not depend on the language. Must match `winrm_username`. |
 | `LOCALE` | `fr-FR` | Language and keyboard of the installer. Must be one the Windows ISO contains. |
 | `TIMEZONE` | `Romance Standard Time` | Windows time zone name. |
 | `WIN_HOSTNAME` | `windows-build` | Computer name. |
@@ -74,11 +68,13 @@ sh example/windows/answer-iso/make-answer-iso.sh answers-win2025-fr.iso
 To list the editions of an ISO, mount it and run `dism /Get-WimInfo /WimFile:D:\sources\install.wim` on
 Windows, or `wiminfo install.wim` from `wimtools` on Linux.
 
-The ISO contains the build password in clear text: treat it as a secret, host it at an unguessable URL and
-remove it when you are done. The password stays valid in the final image unless a provisioner changes it.
+Every variable is optional. The ISO holds the build password in clear text, which is why it is a throwaway
+default and not a secret. Set `winrm_final_username` / `winrm_final_password` in the template (step 3): once the
+provisioners are done the plugin creates that account, and deletes the build account (and its auto-logon
+password) at the first boot of the image. Never put a real password in the ISO.
 
-You need one ISO per combination of image, language, password and runner address. A different Windows version
-usually only changes `IMAGE_VALUE` (or the index).
+You need one ISO per combination of image, language, time zone and build account, not per runner. A different
+Windows version usually only changes `IMAGE_VALUE` (or the index).
 
 ### Validate the answer file
 
@@ -86,9 +82,9 @@ usually only changes `IMAGE_VALUE` (or the index).
 only Python 3 (and `xorriso` to read an ISO):
 
 ```sh
-WINRM_PASSWORD='<throwaway build password>' \
+WINRM_PASSWORD='Packer-build-1' \
   python3 example/windows/answer-iso/validate-answer-iso.py answers-win2025-fr.iso \
-  --username Administrateur --bootstrap-url http://RUNNER_IP:8080
+  --username packer
 ```
 
 It fails (exit status 1) when:
@@ -100,8 +96,7 @@ It fails (exit status 1) when:
 - `--username` / `WINRM_PASSWORD` do not match the account in the file (they must equal `winrm_username` /
   `winrm_password` in your template).
 
-It warns about clear-text passwords, a `FirstLogonCommands` that never mentions WinRM, and (with
-`--bootstrap-url`, run from the runner while Packer's HTTP server is up) an unreachable bootstrap script.
+It warns about clear-text passwords and a `FirstLogonCommands` that never mentions WinRM.
 It is a structural check: it cannot prove that Windows accepts the file, only a build does.
 
 ### Bring your own ISO
@@ -117,13 +112,13 @@ to start from is [`example/windows/answer-iso/autounattend.example.xml`](../exam
 3. It creates the **build account** and enables **auto-logon**. Its name and password are the template's
    `winrm_username` and `winrm_password`.
 4. A `FirstLogonCommand` enables **WinRM** over HTTP (port 5985, basic auth, unencrypted) and opens the
-   firewall. Either download the bootstrap from the Packer HTTP server as the template does (the build VM
-   must reach `http_port_min` on the runner), or put the script on your ISO and run it from the CD at first
-   logon, in which case Packer's HTTP server is not needed. `example/windows/scripts/windows-initialisation.ps1`
-   is a working script.
-   This setting must not reach the image: `example/windows/scripts/windows-cleanup.ps1` registers a one-shot
-   startup task that turns unencrypted Basic authentication off at the first boot of a deployed VM (doing it
-   during the build would cut Packer's own session). Keep it as the last provisioner.
+   firewall. Put the script on your ISO and run it from the CD at first logon (the CD letter varies: look for
+   the file on every drive, as `autounattend.xml.in` does). `example/windows/scripts/windows-initialisation.ps1`
+   is a working script. The build VM then never needs to reach the runner.
+   This setting must not reach the image. With `winrm_final_username` the plugin registers a one-shot startup
+   task that turns unencrypted Basic authentication off at the first boot of a deployed VM (doing it during the
+   build would cut Packer's own session). Without it, `example/windows/scripts/windows-cleanup.ps1` does the
+   same: keep it as the last provisioner.
 5. Run `validate-answer-iso.py` on it, host it where Superphenix can download it (step 2), and set
    `cd_url` to that link. `iso_url` stays the Windows ISO. Raise `cd_disk_size` (default `1Gi`) only if your ISO
    is larger than 1 GiB.
@@ -185,16 +180,14 @@ source "superphenix" "win2025" {
   memory = "8Gi"
   disk_size = "50Gi"
 
-  http_directory = "${path.root}/scripts"  # serves windows-initialisation.ps1 to the VM
-  http_port_min  = 8080
-  http_port_max  = 8080
-
   boot_wait    = "5s"
   boot_command = ["<spacebar><wait3><spacebar><wait3><spacebar><wait3><spacebar><wait3><enter>"]  # "press any key", then Enter on the Boot Manager menu
 
   communicator   = "winrm"
-  winrm_username = "Administrateur"
-  winrm_password = var.win_password          # = PASSWORD of step 1
+  winrm_username = "packer"                  # = WIN_USERNAME of step 1
+  winrm_password = var.win_password          # = PASSWORD of step 1 (default Packer-build-1)
+  winrm_final_username = var.final_username  # created at the end of the build...
+  winrm_final_password = var.final_password  # ...while the build account is deleted at the image's first boot
   winrm_use_ssl  = false
   winrm_insecure = true
   winrm_timeout  = "2h"
@@ -207,15 +200,18 @@ Notes:
   `efi`, `secure_boot` or `tpm`, the type's own firmware defaults apply.
 - `cd_url` and `cd_disk_size` (default `1Gi`) are the answer-file ISO. `cd_files` / `cd_content` generate an
   ISO instead, but only work if Superphenix can reach the runner.
-- The first `FirstLogonCommand` retries the bootstrap download for about 10 minutes, so the runner must be
-  reachable on `http_port_min` from the VM before then.
-- Pass the token and `win_password` through sensitive variables (`PKR_VAR_token`, `PKR_VAR_win_password`).
+- `winrm_final_username` / `winrm_final_password` go together, need `communicator = "winrm"` and differ from
+  `winrm_username`. The plugin creates that administrator after the provisioners, removes the auto-logon
+  password and registers a startup task (SYSTEM) that deletes the build account at the image's first boot. The
+  password is uploaded in a script deleted as soon as it runs, never on a command line, and masked in the logs.
+  Leave both empty to keep the build account.
+- Pass the token and `final_password` through sensitive variables (`PKR_VAR_token`, `PKR_VAR_final_password`).
 
 Then:
 
 ```sh
 packer init example/windows
-PKR_VAR_iso_url=https://.../windows-server-2025.iso PKR_VAR_answer_iso_url=http://<EIP>/<random>/answers.iso packer build -color=false example/windows
+PKR_VAR_iso_url=https://.../windows-server-2025.iso PKR_VAR_answer_iso_url=http://<EIP>/<random>/answers.iso PKR_VAR_final_password=<password> packer build -color=false example/windows
 ```
 
 ## What to expect
@@ -231,7 +227,8 @@ PKR_VAR_iso_url=https://.../windows-server-2025.iso PKR_VAR_answer_iso_url=http:
 | Symptom | Cause / action |
 |---|---|
 | Disk import stays `ImportInProgress`, error `Unable to connect to http data source` | The URL is not reachable by Superphenix (a private IP, a closed port, or a security group). Test it from outside the subnet. |
-| Stuck at "Waiting for WinRM" | The VM cannot reach the runner on `http_port_min` (security group), `BOOTSTRAP_URL` is wrong, or `winrm_username` / `winrm_password` differ from the ISO. Watch the VM's console. |
+| Stuck at "Waiting for WinRM" | `winrm_username` / `winrm_password` differ from the ISO, the bootstrap did not run (the ISO lacks `windows-initialisation.ps1`; re-generate it with `make-answer-iso.sh`), or the runner cannot reach the VM's private IP on 5985. Watch the VM's console. |
+| The build fails at "Creating account ..." | Windows refused the account: `winrm_final_password` does not meet the password policy (length, complexity), or the name is invalid. The message of the script is in the error. |
 | Installer says it cannot find an image | `IMAGE_VALUE` does not match an edition of the ISO (see the `dism` command above), or use `IMAGE_KEY=/IMAGE/INDEX`. |
 | Installer shows a language or keyboard error | `LOCALE` is not in the ISO, or does not match its language. |
 | "No bootable device" or no installer | The firmware is BIOS. Set `vm_type` (or `efi = true`) and keep `disk_bus = "sata"`. |
@@ -245,5 +242,6 @@ PKR_VAR_iso_url=https://.../windows-server-2025.iso PKR_VAR_answer_iso_url=http:
   (TPM and Secure Boot checks, edition indexes).
 - The export of a Windows VM is validated (qcow2 of 50 GiB virtual size, 11.6 GiB on disk), but booting the exported qcow2 is not tested. It holds an EFI system: boot it with UEFI.
 - The machine running Packer needs enough free disk space for the qcow2 (about 13 GB for Server 2025). The plugin checks the free space before the download and stops with a clear message if it is not enough; a local write error also stops it at once.
-- The build password remains in the image; change it in a provisioner if the image is shared.
+- Without `winrm_final_username`, the build account (and its password) remains in the image: set it, or change the password in a provisioner, if the image is shared. With it, the build account is deleted at the first boot of a VM deployed from the image, not before: until then it exists in the image.
+- The final account is validated on Windows Server 2025 (French ISO): it logs in, the build account is gone from the user list and from the logon screen. A password rejected by the Windows policy makes the build fail at that step.
 - `floppy_*` is not supported.

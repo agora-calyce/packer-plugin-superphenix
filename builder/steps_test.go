@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -162,5 +163,55 @@ func TestCDURLBody(t *testing.T) {
 	}
 	if got.Advanced != nil {
 		t.Error("vm_type alone must not push advanced overrides")
+	}
+}
+
+// fakeComm records the uploaded script and the command run.
+type fakeComm struct {
+	packersdk.Communicator
+	script, cmd string
+	status      int
+}
+
+func (f *fakeComm) Upload(_ string, r io.Reader, _ *os.FileInfo) error {
+	b, _ := io.ReadAll(r)
+	f.script = string(b)
+	return nil
+}
+func (f *fakeComm) Start(_ context.Context, c *packersdk.RemoteCmd) error {
+	f.cmd = c.Command
+	c.SetExited(f.status)
+	return nil
+}
+
+func TestFinalizeWindows(t *testing.T) {
+	cfg := &Config{FinalUsername: "ops", FinalPassword: "it's"}
+	cfg.Comm.WinRMUser = "packer"
+	run := func(c *fakeComm) (multistep.StepAction, multistep.StateBag) {
+		s := new(multistep.BasicStateBag)
+		s.Put("config", cfg)
+		s.Put("ui", &packersdk.MockUi{})
+		s.Put("communicator", c)
+		return stepFinalizeWindows{}.Run(context.Background(), s), s
+	}
+	c := &fakeComm{}
+	if a, _ := run(c); a != multistep.ActionContinue {
+		t.Fatal("want continue")
+	}
+	for _, want := range []string{"New-LocalUser -Name 'ops'", "'it''s'", "Remove-LocalUser -Name ''packer''", "Remove-Item $PSCommandPath", "LogonUI"} {
+		if !strings.Contains(c.script, want) {
+			t.Errorf("script lacks %q:\n%s", want, c.script)
+		}
+	}
+	if strings.Contains(c.cmd, "it's") {
+		t.Error("password must not be on the command line")
+	}
+	if a, s := run(&fakeComm{status: 1}); a != multistep.ActionHalt || s.Get("error") == nil {
+		t.Error("non-zero exit must halt")
+	}
+	cfg.FinalUsername = ""
+	c = &fakeComm{}
+	if a, _ := run(c); a != multistep.ActionContinue || c.cmd != "" {
+		t.Error("without winrm_final_username the step must do nothing")
 	}
 }
