@@ -67,7 +67,7 @@ Reference documentation:
 - Sources: cloud image (`source_url`) or ISO (`iso_url`, UEFI, driven by `boot_command` over VNC). Linux ISO
   installs are only tested with Ubuntu Server 26.04 and a `user_data` autoinstall.
 - Windows: validated with Windows Server 2025 (French ISO) only, about 37 minutes (43 with the export). It needs
-  a hosted answer-file ISO (`cd_url`, independent of the runner) and WinRM, and `winrm_final_username`/`winrm_final_password` replace the build account; `cd_files`/`cd_content` only work if Superphenix can reach the
+  a hosted answer-file ISO (`cd_url`, independent of the runner) and WinRM, and `winrm_final_username`/`winrm_final_password` set the account the image keeps (the build account is deleted at the first boot; the built-in administrator is either that account or disabled); `cd_files`/`cd_content` only work if Superphenix can reach the
   runner; no `floppy`.
 - The export post-processor is validated on a VM built from a cloud image and on ISO builds (Ubuntu Server
   26.04, Windows Server 2025). Booting an exported qcow2 is not tested. The Packer machine needs free disk

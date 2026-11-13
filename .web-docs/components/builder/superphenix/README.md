@@ -113,9 +113,12 @@ alphabetized.
 
 - `vm_type` (string) - VM type (size preset), if your AZ defines some.
 
-- `winrm_final_username` (string) - WinRM builds: name of the administrator account created once the provisioners are done. The build account
-  (`winrm_username`, created by the answer file) is then deleted at the first boot of the image, so the image
-  keeps only this account. Needs `winrm_final_password`. Leave both empty to keep the build account.
+- `winrm_final_username` (string) - WinRM builds: name of the administrator account the image keeps, set up once the provisioners are done. The
+  build account (`winrm_username`, created by the answer file) is then deleted at the first boot of the image.
+  If the name is the built-in administrator (`Administrator`, `Administrateur`...), that account gets
+  `winrm_final_password` and is enabled; otherwise the account is created, and the built-in administrator,
+  which the answer file gave the build password, is disabled with a random password. Needs
+  `winrm_final_password`. Leave both empty to keep the build account.
 
 - `winrm_final_password` (string) - Password of `winrm_final_username`. Pass it through a sensitive variable. It is never written to the
   image in clear text and is masked in the logs.
@@ -286,7 +289,11 @@ the user (see `user_data`).
 of the installer must create that account and enable WinRM (see the Windows guide). To leave a clean image, also set
 `winrm_final_username` and `winrm_final_password` (both, WinRM only): once the provisioners are done the plugin creates
 that administrator and schedules the removal of the build account (`winrm_username`) and of the unencrypted Basic
-authentication at the first boot of a VM deployed from the image.
+authentication at the first boot of a VM deployed from the image. The name decides what happens to the built-in
+administrator (`Administrator`, `Administrateur`, found by SID): if it is that name, the account only gets the
+password and is enabled; otherwise a new account is created and the built-in administrator, which the answer file
+gave the build password, is disabled with a random password. See the Windows guide (`docs/windows.md`, "The final
+account").
 
 <!-- Code generated from the comments of the Config struct in communicator/config.go; DO NOT EDIT MANUALLY -->
 

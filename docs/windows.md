@@ -57,7 +57,7 @@ sh example/windows/answer-iso/make-answer-iso.sh answers-win2025-fr.iso
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PASSWORD` | `Packer-build-1` | Password of the build account (also the local Administrator). A throwaway: the same value as `winrm_password` in the template (its default). |
+| `PASSWORD` | `Packer-build-1` | Password of the build account, and also of the built-in administrator. A throwaway: the same value as `winrm_password` in the template (its default). See [The final account](#the-final-account). |
 | `WIN_USERNAME` | `packer` | Build account, a local administrator that does not depend on the language. Must match `winrm_username`. |
 | `LOCALE` | `fr-FR` | Language and keyboard of the installer. Must be one the Windows ISO contains. |
 | `TIMEZONE` | `Romance Standard Time` | Windows time zone name. |
@@ -70,8 +70,9 @@ Windows, or `wiminfo install.wim` from `wimtools` on Linux.
 
 Every variable is optional. The ISO holds the build password in clear text, which is why it is a throwaway
 default and not a secret. Set `winrm_final_username` / `winrm_final_password` in the template (step 3): once the
-provisioners are done the plugin creates that account, and deletes the build account (and its auto-logon
-password) at the first boot of the image. Never put a real password in the ISO.
+provisioners are done the plugin sets up that account, deletes the build account (and its auto-logon password) at the
+first boot of the image, and disables the built-in administrator if you chose another name (details in
+[The final account](#the-final-account)). Never put a real password in the ISO.
 
 You need one ISO per combination of image, language, time zone and build account, not per runner. A different
 Windows version usually only changes `IMAGE_VALUE` (or the index).
@@ -200,11 +201,7 @@ Notes:
   `efi`, `secure_boot` or `tpm`, the type's own firmware defaults apply.
 - `cd_url` and `cd_disk_size` (default `1Gi`) are the answer-file ISO. `cd_files` / `cd_content` generate an
   ISO instead, but only work if Superphenix can reach the runner.
-- `winrm_final_username` / `winrm_final_password` go together, need `communicator = "winrm"` and differ from
-  `winrm_username`. The plugin creates that administrator after the provisioners, removes the auto-logon
-  password and registers a startup task (SYSTEM) that deletes the build account at the image's first boot. The
-  password is uploaded in a script deleted as soon as it runs, never on a command line, and masked in the logs.
-  Leave both empty to keep the build account.
+- `winrm_final_username` / `winrm_final_password` define the account the image keeps; see [The final account](#the-final-account).
 - Pass the token and `final_password` through sensitive variables (`PKR_VAR_token`, `PKR_VAR_final_password`).
 
 Then:
@@ -213,6 +210,47 @@ Then:
 packer init example/windows
 PKR_VAR_iso_url=https://.../windows-server-2025.iso PKR_VAR_answer_iso_url=http://<EIP>/<random>/answers.iso PKR_VAR_final_password=<password> packer build -color=false example/windows
 ```
+
+## The final account
+
+The answer file creates two accounts: the **build account** (`packer` by default, a local administrator, throwaway
+password) that Packer uses over WinRM, and the **built-in administrator** (`Administrator`, `Administrateur`
+on a French Windows), which Windows always has and to which the answer file also gives the build password.
+Without further settings, both stay in the image with that known password. `winrm_final_username` and
+`winrm_final_password` (both, `communicator = "winrm"` only) say who keeps access. After the provisioners the plugin
+removes the auto-logon password from the registry and registers a startup task that deletes the build account at
+the first boot. The built-in administrator is found by its SID (`...-500`), so the language of the ISO does not
+matter. Which case applies depends on the name you choose:
+
+| `winrm_final_username` | What the plugin does with it | The built-in administrator |
+|---|---|---|
+| The built-in administrator (`Administrator`, `Administrateur`, case-insensitive) | Nothing is created: the account exists. It gets `winrm_final_password` and is enabled (password never expires). | This is the final account. |
+| Any other name (for example `ops`) | A new local administrator is created with `winrm_final_password`. | **Disabled, with a random password nobody knows.** It no longer keeps the build password. |
+| Empty (with `winrm_final_password` empty) | Nothing: the build account stays. | Stays enabled with the build password. Set the final account, or change the passwords in a provisioner, if the image is shared. |
+
+In every case with a final account, at the first boot of a VM deployed from the image (not during the build, because
+Packer's own session runs as the build account):
+
+- the build account `packer` and its profile are deleted, and so is its tile on the logon screen: the only account
+  offered is the final one;
+- unencrypted Basic authentication on WinRM is turned off;
+- if the build account was itself the built-in administrator (`winrm_username = "Administrateur"`), it cannot be deleted:
+  it is disabled and gets a random password.
+
+Notes:
+
+- `winrm_final_username` must differ from `winrm_username` (the build account is the one removed).
+- The password is uploaded in a script that deletes itself as soon as it runs, never put on a command line, and is
+  masked in the logs. Only its hash stays in the image.
+- Windows' password policy applies: a password that is too short or too simple makes the build fail at the step
+  "Creating account ...".
+- Until the first boot of a deployed VM, the build account and the unencrypted Basic authentication still exist in the
+  image: do not publish the image without deploying it once.
+- Pass the password through a sensitive variable (`PKR_VAR_final_password`).
+
+Validated on Windows Server 2025 (French ISO): with `Administrateur` as the final account (it logs in with the final
+password), and with `ops` (it logs in, `Administrateur` is disabled, `packer` is gone, and the logon screen offers
+only `ops`).
 
 ## What to expect
 
@@ -242,6 +280,5 @@ PKR_VAR_iso_url=https://.../windows-server-2025.iso PKR_VAR_answer_iso_url=http:
   (TPM and Secure Boot checks, edition indexes).
 - The export of a Windows VM is validated (qcow2 of 50 GiB virtual size, 11.6 GiB on disk), but booting the exported qcow2 is not tested. It holds an EFI system: boot it with UEFI.
 - The machine running Packer needs enough free disk space for the qcow2 (about 13 GB for Server 2025). The plugin checks the free space before the download and stops with a clear message if it is not enough; a local write error also stops it at once.
-- Without `winrm_final_username`, the build account (and its password) remains in the image: set it, or change the password in a provisioner, if the image is shared. With it, the build account is deleted at the first boot of a VM deployed from the image, not before: until then it exists in the image.
-- The final account is validated on Windows Server 2025 (French ISO): it logs in, the build account is gone from the user list and from the logon screen. A password rejected by the Windows policy makes the build fail at that step.
+- Without `winrm_final_username`, the build account and the built-in administrator keep the build password in the image (see [The final account](#the-final-account)). With it, the build account is deleted at the first boot of a VM deployed from the image, not before.
 - `floppy_*` is not supported.

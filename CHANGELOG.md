@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2 - 2026-11-13
+
+### Documentation
+- Windows guide: new "The final account" section (the two cases, what is deleted or disabled at the first boot, what the logon screen shows).
+
+### Security
+- Windows, `winrm_final_username`: the built-in administrator (`Administrator`/`Administrateur`) kept the throwaway build password set by the answer file and stayed enabled in the image. It is now disabled with a random password when the final account is another one (when the build account itself is the built-in administrator, the first-boot startup task does it).
+
+### Fixed
+- Windows, `winrm_final_username`: the deleted build account still showed on the logon screen, from its `UserTile` cache entry (a tile per SID), which the first-boot startup task did not clear. It now removes it (0.1.1 announced a logon-screen cleanup that did not cover this).
+- Windows, `winrm_final_username` set to the built-in administrator (`Administrator`/`Administrateur`) made the build fail, because the account already exists. The plugin now sets its password to `winrm_final_password` and enables it. The account is found by SID, so the language does not matter.
+
 ## 0.1.1 - 2026-11-13
 
 ### Breaking changes

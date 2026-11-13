@@ -89,7 +89,11 @@ the user (see `user_data`).
 of the installer must create that account and enable WinRM (see the Windows guide). To leave a clean image, also set
 `winrm_final_username` and `winrm_final_password` (both, WinRM only): once the provisioners are done the plugin creates
 that administrator and schedules the removal of the build account (`winrm_username`) and of the unencrypted Basic
-authentication at the first boot of a VM deployed from the image.
+authentication at the first boot of a VM deployed from the image. The name decides what happens to the built-in
+administrator (`Administrator`, `Administrateur`, found by SID): if it is that name, the account only gets the
+password and is enabled; otherwise a new account is created and the built-in administrator, which the answer file
+gave the build password, is disabled with a random password. See the Windows guide (`docs/windows.md`, "The final
+account").
 
 @include 'packer-plugin-sdk/communicator/Config-not-required.mdx'
 
