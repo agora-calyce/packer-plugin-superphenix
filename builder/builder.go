@@ -97,9 +97,12 @@ type Config struct {
 	UserData string `mapstructure:"user_data"`
 	// VM type (size preset), if your AZ defines some.
 	VMType string `mapstructure:"vm_type"`
-	// WinRM builds: name of the administrator account created once the provisioners are done. The build account
-	// (`winrm_username`, created by the answer file) is then deleted at the first boot of the image, so the image
-	// keeps only this account. Needs `winrm_final_password`. Leave both empty to keep the build account.
+	// WinRM builds: name of the administrator account the image keeps, set up once the provisioners are done. The
+	// build account (`winrm_username`, created by the answer file) is then deleted at the first boot of the image.
+	// If the name is the built-in administrator (`Administrator`, `Administrateur`...), that account gets
+	// `winrm_final_password` and is enabled; otherwise the account is created, and the built-in administrator,
+	// which the answer file gave the build password, is disabled with a random password. Needs
+	// `winrm_final_password`. Leave both empty to keep the build account.
 	FinalUsername string `mapstructure:"winrm_final_username"`
 	// Password of `winrm_final_username`. Pass it through a sensitive variable. It is never written to the
 	// image in clear text and is masked in the logs.

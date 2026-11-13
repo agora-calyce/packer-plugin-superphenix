@@ -198,7 +198,8 @@ func TestFinalizeWindows(t *testing.T) {
 	if a, _ := run(c); a != multistep.ActionContinue {
 		t.Fatal("want continue")
 	}
-	for _, want := range []string{"New-LocalUser -Name 'ops'", "'it''s'", "Remove-LocalUser -Name ''packer''", "Remove-Item $PSCommandPath", "LogonUI"} {
+	for _, want := range []string{"New-LocalUser -Name 'ops'", "'it''s'", "Remove-LocalUser -Name ''packer''", "Remove-Item $PSCommandPath", `LogonUI\UserTile'' -Name $sid`, "(Get-LocalUser -Name ''packer'').SID.Value",
+		"if ($adm.Name -eq 'ops')", "Enable-LocalUser -SID $adm.SID", "if ($adm.Name -ne 'packer')", "Disable-LocalUser -SID $adm.SID"} {
 		if !strings.Contains(c.script, want) {
 			t.Errorf("script lacks %q:\n%s", want, c.script)
 		}

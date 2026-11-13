@@ -15,25 +15,45 @@ const finalizeScriptPath = `C:\Windows\Temp\packer-spx-finalize.ps1`
 // psq quotes s as a PowerShell single-quoted string.
 func psq(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
-// finalizeScript creates the final administrator account and registers a one-shot startup task (SYSTEM) that, at
+// lockedPassword is a PowerShell expression: a random password nobody knows.
+const lockedPassword = `(ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force)`
+
+// finalizeScript sets up the final administrator account and registers a one-shot startup task (SYSTEM) that, at
 // the first boot of the image, deletes the build account and turns unencrypted Basic WinRM off. Both must wait: Packer's
 // own session runs as the build account over Basic. The password only lives in this script, deleted when it ends.
+//
+// The built-in administrator (SID ...-500, named Administrator or Administrateur by language) always exists and the
+// answer file gives it the build password. When user is that account, it only gets the final password and is
+// enabled; otherwise user is created and the built-in one is locked (random password, disabled), unless it is the
+// build account itself, which the startup task then locks (a built-in account cannot be deleted).
 func finalizeScript(build, user, password string) string {
 	deferred := strings.Join([]string{
 		"Start-Service WinRM",
 		"Set-Item WSMan:\\localhost\\Service\\AllowUnencrypted $false",
 		"Set-Item WSMan:\\localhost\\Service\\Auth\\Basic $false",
+		// The SID must be read before the account is gone: the logon screen caches one tile per SID in UserTile.
+		"$sid = (Get-LocalUser -Name " + psq(build) + ").SID.Value",
 		"Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath -like '*\\' + " + psq(build) + " } | Remove-CimInstance",
-		"try { Remove-LocalUser -Name " + psq(build) + " } catch { Disable-LocalUser -Name " + psq(build) + " }",
-		// The logon screen keeps showing the last user (the auto-logged build account) from this cache.
+		"try { Remove-LocalUser -Name " + psq(build) + " } catch { Set-LocalUser -Name " + psq(build) + " -Password " + lockedPassword + "; Disable-LocalUser -Name " + psq(build) + " }",
+		// The logon screen keeps showing the build account from these caches: its UserTile entry (one per SID, never the
+		// built-in administrator, -500) and the last logged-on user.
+		`if ($sid -and $sid -notlike '*-500') { Remove-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\UserTile' -Name $sid -ErrorAction SilentlyContinue }`,
 		`Remove-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI' -Name LastLoggedOnUser, LastLoggedOnSAMUser, LastLoggedOnDisplayName, LastLoggedOnUserSID, SelectedUserSID -ErrorAction SilentlyContinue`,
 		"Unregister-ScheduledTask -TaskName PackerFinalize -Confirm:$false",
 	}, "; ")
 	return strings.Join([]string{
 		"$ErrorActionPreference = 'Stop'",
 		"Remove-Item $PSCommandPath -Force", // the password must not outlive this run
-		"New-LocalUser -Name " + psq(user) + " -Password (ConvertTo-SecureString " + psq(password) + " -AsPlainText -Force) -PasswordNeverExpires -AccountNeverExpires | Out-Null",
-		"Add-LocalGroupMember -SID S-1-5-32-544 -Member " + psq(user),
+		"$pw = ConvertTo-SecureString " + psq(password) + " -AsPlainText -Force",
+		"$adm = Get-LocalUser | Where-Object { $_.SID.Value -like 'S-1-5-21-*-500' }",
+		"if ($adm.Name -eq " + psq(user) + ") {",
+		"  Set-LocalUser -SID $adm.SID -Password $pw -PasswordNeverExpires $true",
+		"  Enable-LocalUser -SID $adm.SID",
+		"} else {",
+		"  New-LocalUser -Name " + psq(user) + " -Password $pw -PasswordNeverExpires -AccountNeverExpires | Out-Null",
+		"  Add-LocalGroupMember -SID S-1-5-32-544 -Member " + psq(user),
+		"  if ($adm.Name -ne " + psq(build) + ") { Set-LocalUser -SID $adm.SID -Password " + lockedPassword + "; Disable-LocalUser -SID $adm.SID }",
+		"}",
 		// Auto-logon keeps the build password in clear text in the registry.
 		`$w = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'`,
 		"Set-ItemProperty $w AutoAdminLogon 0",
