@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3 - 2026-11-13
+
+### Fixed
+- Builder: any non-empty `user_data` crashed the plugin during `packer validate`/`build` (`panic: index out of range [0] with length 0`, then "Packer crashed"). Present since 0.1.0 (`MergeUserData`, called by `Prepare`, indexed the empty document of a `#cloud-config`-only base). `user_data` is also validated again at `Prepare` as the plugin's own cloud-config will merge it: a `users` or `packages` that is not a list is reported early.
+
 ## 0.1.2 - 2026-11-13
 
 ### Documentation

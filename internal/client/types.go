@@ -308,6 +308,9 @@ func MergeUserData(base, userData string) (string, error) {
 	if len(u.Content) == 0 { // only the #cloud-config line
 		u = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
 	}
+	if len(b.Content) == 0 { // base is only a comment, as in Prepare's validation call
+		b = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
+	}
 	um, bm := u.Content[0], b.Content[0]
 	if um.Kind != yaml.MappingNode {
 		return "", errors.New("user_data: the cloud-config must be a YAML mapping")

@@ -23,3 +23,20 @@ func TestBootCommandWithSourceURL(t *testing.T) {
 		t.Error("no source: want an error")
 	}
 }
+
+// Prepare validates user_data: it must accept a valid one (it used to panic) and reject a malformed one.
+func TestPrepareUserData(t *testing.T) {
+	cfg := func(userData string) map[string]interface{} {
+		return map[string]interface{}{"api_url": "https://a", "org_id": "o", "az": "az", "project_id": "p", "token": "t",
+			"subnet_eid": "s", "storage_class": "sc", "source_url": "https://img", "user_data": userData}
+	}
+	if _, _, err := (&Builder{}).Prepare(cfg("#cloud-config\nhostname: web\nusers:\n  - name: bob\npackages: [nginx]\n")); err != nil {
+		t.Errorf("valid user_data: %v", err)
+	}
+	if _, _, err := (&Builder{}).Prepare(cfg("#cloud-config\nusers: bob\n")); err == nil {
+		t.Error("users that is not a list: want an error")
+	}
+	if _, _, err := (&Builder{}).Prepare(cfg("#!/bin/sh\necho hi")); err == nil {
+		t.Error("not a #cloud-config: want an error")
+	}
+}

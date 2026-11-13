@@ -238,3 +238,16 @@ func TestDeleteInstanceRetriesOn5xx(t *testing.T) {
 		t.Fatalf("expected 3 calls without error, got %d calls, err=%v", calls, err)
 	}
 }
+
+// Prepare validates user_data against a base that holds only the #cloud-config line: it used to panic.
+func TestMergeUserDataEmptyBase(t *testing.T) {
+	got, err := MergeUserData("#cloud-config\n", "#cloud-config\nhostname: web\nusers:\n  - name: bob\npackages: [nginx]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"#cloud-config\n", "hostname: web", "name: bob", "nginx"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("merged config lacks %q:\n%s", want, got)
+		}
+	}
+}

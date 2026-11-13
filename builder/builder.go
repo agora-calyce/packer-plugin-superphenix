@@ -180,7 +180,8 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	if _, err := client.GiBInt(c.Memory); err != nil {
 		errs = append(errs, fmt.Errorf("memory: %w", err))
 	}
-	if _, err := client.MergeUserData("#cloud-config\n", c.UserData); err != nil {
+	// Same shape as the plugin's own config, so that a user_data whose `users`/`packages` is not a list fails here.
+	if _, err := client.MergeUserData("#cloud-config\nusers: []\npackages: []\n", c.UserData); err != nil {
 		errs = append(errs, err)
 	}
 	if (c.FinalUsername == "") != (c.FinalPassword == "") {
