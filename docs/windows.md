@@ -235,7 +235,8 @@ Packer's own session runs as the build account):
   offered is the final one;
 - unencrypted Basic authentication on WinRM is turned off;
 - if the build account was itself the built-in administrator (`winrm_username = "Administrateur"`), it cannot be deleted:
-  it is disabled and gets a random password.
+  it is disabled and gets a random password. This case is only covered by unit tests, not validated on a real
+  build: keep a dedicated build account (`packer`, the default) rather than the built-in administrator.
 
 Notes:
 
@@ -251,6 +252,32 @@ Notes:
 Validated on Windows Server 2025 (French ISO): with `Administrateur` as the final account (it logs in with the final
 password), and with `ops` (it logs in, `Administrateur` is disabled, `packer` is gone, and the logon screen offers
 only `ops`).
+
+## Sysprep
+
+Optional: set `sysprep = true` to generalize the image (`sysprep.exe /generalize /oobe /shutdown /quiet`) as the very
+last action. Without it, nothing changes.
+
+- Sysprep removes the network adapter, which cuts WinRM. So it runs **after** the final account is set up
+  (`winrm_final_*`, which needs WinRM), launched detached (a one-shot `SYSTEM` task), and the plugin then waits for the
+  VM to shut down through the Superphenix API, up to `sysprep_timeout` (30 minutes by default).
+- Sysprep shuts the VM down itself (`/shutdown`): that is the only signal that it finished, since the VM has no
+  network. If the VM is still up at the timeout, Sysprep failed; the build stops and the log is on the VM:
+  `C:\Windows\System32\Sysprep\Panther\setupact.log`.
+- `sysprep_unattend` is the path, **on the VM**, of an unattend file (`/unattend:`). Write it with a provisioner
+  (see `example/windows/sysprep-unattend.xml`), outside `C:\Windows\Temp` and `C:\Windows\Panther`, which
+  `windows-cleanup.ps1` empties. Without it, Sysprep runs without an answer file and the first boot asks its OOBE questions.
+- Do not put `UserAccounts/AdministratorPassword` in the unattend: at the first boot it overwrites the password of the
+  built-in administrator, so it would replace `winrm_final_password` (when the final account is the built-in one) or
+  undo its lock (otherwise).
+- The script that used to run `sysprep.exe` must now only write the unattend file.
+- Needs `communicator = "winrm"`.
+
+Validated on Windows Server 2025 (French ISO), with the build account `packer` and `winrm_final_username = "ops"`:
+Sysprep shuts the VM down, the plugin leaves it stopped, and at its first boot the image goes straight to the logon
+screen (no OOBE, no administrator password prompt), keeps its network adapter, deletes `packer`, disables the built-in
+administrator and offers only `ops`. Not validated: Windows Server 2022, and a Sysprep that fails (the timeout and its
+message are only covered by unit tests).
 
 ## What to expect
 
@@ -281,4 +308,6 @@ only `ops`).
 - The export of a Windows VM is validated (qcow2 of 50 GiB virtual size, 11.6 GiB on disk), but booting the exported qcow2 is not tested. It holds an EFI system: boot it with UEFI.
 - The machine running Packer needs enough free disk space for the qcow2 (about 13 GB for Server 2025). The plugin checks the free space before the download and stops with a clear message if it is not enough; a local write error also stops it at once.
 - Without `winrm_final_username`, the build account and the built-in administrator keep the build password in the image (see [The final account](#the-final-account)). With it, the build account is deleted at the first boot of a VM deployed from the image, not before.
+- Sysprep (`sysprep = true`) is validated with Windows Server 2025 (French ISO) only, and its failure path (VM still running at `sysprep_timeout`) only by unit tests.
+- `winrm_username` set to the built-in administrator (`Administrator`, `Administrateur`) is not validated on a real build; use a dedicated build account (see [The final account](#the-final-account)).
 - `floppy_*` is not supported.

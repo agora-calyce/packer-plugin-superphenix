@@ -123,6 +123,19 @@ alphabetized.
 - `winrm_final_password` (string) - Password of `winrm_final_username`. Pass it through a sensitive variable. It is never written to the
   image in clear text and is masked in the logs.
 
+- `sysprep` (bool) - WinRM builds: run Sysprep (`/generalize /oobe /shutdown /quiet`) as the very last action, after
+  `winrm_final_username` is set up. Sysprep removes the network adapter, so it is launched detached (one-shot
+  SYSTEM task) and the plugin waits for the VM to shut down through the Superphenix API, not through WinRM.
+  Off by default.
+
+- `sysprep_unattend` (string) - Path, on the VM, of an unattend file for Sysprep (`/unattend:`), written beforehand by a provisioner, for
+  example `C:\Windows\System32\Sysprep\unattend-sysprep.xml`. Needs `sysprep`. Without it, Sysprep runs without
+  an answer file. Do not put `UserAccounts/AdministratorPassword` in it: it would overwrite the password set by
+  `winrm_final_password`.
+
+- `sysprep_timeout` (duration string | ex: "1h5m2s") - How long to wait for Sysprep to shut the VM down. Default `30m`. If the VM stays up, Sysprep failed: see
+  `C:\Windows\System32\Sysprep\Panther\setupact.log` on the VM.
+
 <!-- End of code generated from the comments of the Config struct in builder/builder.go; -->
 
 
@@ -294,6 +307,10 @@ administrator (`Administrator`, `Administrateur`, found by SID): if it is that n
 password and is enabled; otherwise a new account is created and the built-in administrator, which the answer file
 gave the build password, is disabled with a random password. See the Windows guide (`docs/windows.md`, "The final
 account").
+
+To generalize the image, set `sysprep = true` (optionally `sysprep_unattend`, the path of an unattend file on the VM,
+and `sysprep_timeout`). It runs last, after `winrm_final_*`; the VM shuts down by itself and the plugin waits for it
+through the API. See the Windows guide (`docs/windows.md`, "Sysprep").
 
 <!-- Code generated from the comments of the Config struct in communicator/config.go; DO NOT EDIT MANUALLY -->
 

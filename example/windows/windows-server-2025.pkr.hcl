@@ -76,6 +76,11 @@ source "superphenix" "win2025" {
   # Created after the provisioners; the build account is deleted at the first boot of the image.
   winrm_final_username = var.final_username
   winrm_final_password = var.final_password
+  # Optional: generalize the image as the very last action (see docs/windows.md, "Sysprep"). The unattend file
+  # is uploaded by a provisioner below. Remove these three lines to skip Sysprep.
+  sysprep          = true
+  sysprep_unattend = "C:\\Windows\\System32\\Sysprep\\unattend-sysprep.xml"
+  sysprep_timeout  = "30m"
   winrm_use_ssl  = false
   winrm_insecure = true
   winrm_timeout  = "2h" # the install takes about 30 min, wide margin
@@ -83,6 +88,12 @@ source "superphenix" "win2025" {
 
 build {
   sources = ["source.superphenix.win2025"]
+
+  # Only needed with sysprep_unattend. Keep it out of C:\Windows\Temp and C:\Windows\Panther (windows-cleanup.ps1 empties them).
+  provisioner "file" {
+    source      = "sysprep-unattend.xml"
+    destination = "C:\\Windows\\System32\\Sysprep\\unattend-sysprep.xml"
+  }
 
   provisioner "powershell" {
     elevated_user     = var.win_username

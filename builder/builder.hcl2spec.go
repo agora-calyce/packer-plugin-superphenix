@@ -105,6 +105,9 @@ type FlatConfig struct {
 	VMType                    *string           `mapstructure:"vm_type" cty:"vm_type" hcl:"vm_type"`
 	FinalUsername             *string           `mapstructure:"winrm_final_username" cty:"winrm_final_username" hcl:"winrm_final_username"`
 	FinalPassword             *string           `mapstructure:"winrm_final_password" cty:"winrm_final_password" hcl:"winrm_final_password"`
+	Sysprep                   *bool             `mapstructure:"sysprep" cty:"sysprep" hcl:"sysprep"`
+	SysprepUnattend           *string           `mapstructure:"sysprep_unattend" cty:"sysprep_unattend" hcl:"sysprep_unattend"`
+	SysprepTimeout            *string           `mapstructure:"sysprep_timeout" cty:"sysprep_timeout" hcl:"sysprep_timeout"`
 }
 
 // FlatMapstructure returns a new FlatConfig.
@@ -214,6 +217,9 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"vm_type":                      &hcldec.AttrSpec{Name: "vm_type", Type: cty.String, Required: false},
 		"winrm_final_username":         &hcldec.AttrSpec{Name: "winrm_final_username", Type: cty.String, Required: false},
 		"winrm_final_password":         &hcldec.AttrSpec{Name: "winrm_final_password", Type: cty.String, Required: false},
+		"sysprep":                      &hcldec.AttrSpec{Name: "sysprep", Type: cty.Bool, Required: false},
+		"sysprep_unattend":             &hcldec.AttrSpec{Name: "sysprep_unattend", Type: cty.String, Required: false},
+		"sysprep_timeout":              &hcldec.AttrSpec{Name: "sysprep_timeout", Type: cty.String, Required: false},
 	}
 	return s
 }
