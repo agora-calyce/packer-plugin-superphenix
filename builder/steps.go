@@ -278,8 +278,13 @@ type stepStop struct{}
 func (stepStop) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	state.Get("ui").(packersdk.Ui).Say("Stopping instance...")
 	api, id := state.Get("client").(*client.Client), state.Get("instance_id").(string)
+	// Always ask for the stop, even when the guest already shut itself down (Sysprep /shutdown): the VM runs with
+	// runStrategy Always, and only this call sets it to Halted. Without it Superphenix restarts the VM, and the
+	// image boots a first time (specialize) before anyone uses it. An error is fine if the VM is already stopped.
 	if err := api.StopInstance(ctx, id); err != nil {
-		return fail(state, err)
+		if i, gerr := api.GetInstance(ctx, id); gerr != nil || i.VM.Status.PrintableStatus != "Stopped" {
+			return fail(state, err)
+		}
 	}
 	wctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()

@@ -95,6 +95,10 @@ password and is enabled; otherwise a new account is created and the built-in adm
 gave the build password, is disabled with a random password. See the Windows guide (`docs/windows.md`, "The final
 account").
 
+To generalize the image, set `sysprep = true` (optionally `sysprep_unattend`, the path of an unattend file on the VM,
+and `sysprep_timeout`). It runs last, after `winrm_final_*`; the VM shuts down by itself and the plugin waits for it
+through the API. See the Windows guide (`docs/windows.md`, "Sysprep").
+
 @include 'packer-plugin-sdk/communicator/Config-not-required.mdx'
 
 @include 'packer-plugin-sdk/communicator/SSH-not-required.mdx'

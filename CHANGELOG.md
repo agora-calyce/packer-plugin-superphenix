@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.4 - Unreleased
+
+### Added
+- Windows (WinRM): optional `sysprep`, `sysprep_unattend` and `sysprep_timeout`. The plugin runs Sysprep (`/generalize /oobe /shutdown /quiet`, detached) after `winrm_final_*` is set up and waits for the VM to shut down through the API, instead of a provisioner that loses WinRM when the network adapter disappears. Off by default: no change without `sysprep = true`. See `docs/windows.md`, "Sysprep".
+
+### Fixed
+- Windows, `winrm_final_username` when the build account is the built-in administrator: it stayed enabled with the build password in the image. The first-boot task deletes the build account in a `try`/`catch` to lock it when it cannot be deleted, but `Remove-LocalUser` reports that refusal as a non-terminating error, which `catch` never saw. It now uses `-ErrorAction Stop` (covered by unit tests only; keep a dedicated build account such as `packer`).
+
+### Changed
+- `stepStop` accepts a VM that already shut itself down (Sysprep `/shutdown`): the stop call is still made, as it is what keeps Superphenix from restarting the VM, and its error is ignored when the VM is `Stopped`.
+- Windows, `winrm_final_username`: the first-boot task no longer errors when the WinRM service is disabled (for example by an unattend).
+
 ## 0.1.3 - 2026-11-13
 
 ### Fixed

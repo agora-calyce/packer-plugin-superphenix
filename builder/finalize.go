@@ -28,13 +28,14 @@ const lockedPassword = `(ConvertTo-SecureString ([guid]::NewGuid().ToString('N')
 // build account itself, which the startup task then locks (a built-in account cannot be deleted).
 func finalizeScript(build, user, password string) string {
 	deferred := strings.Join([]string{
-		"Start-Service WinRM",
-		"Set-Item WSMan:\\localhost\\Service\\AllowUnencrypted $false",
-		"Set-Item WSMan:\\localhost\\Service\\Auth\\Basic $false",
+		"Start-Service WinRM -ErrorAction SilentlyContinue",
+		"Set-Item WSMan:\\localhost\\Service\\AllowUnencrypted $false -ErrorAction SilentlyContinue",
+		"Set-Item WSMan:\\localhost\\Service\\Auth\\Basic $false -ErrorAction SilentlyContinue",
+		// -ErrorAction Stop: refusing to delete a built-in account is a non-terminating error that catch would not see.
 		// The SID must be read before the account is gone: the logon screen caches one tile per SID in UserTile.
 		"$sid = (Get-LocalUser -Name " + psq(build) + ").SID.Value",
 		"Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath -like '*\\' + " + psq(build) + " } | Remove-CimInstance",
-		"try { Remove-LocalUser -Name " + psq(build) + " } catch { Set-LocalUser -Name " + psq(build) + " -Password " + lockedPassword + "; Disable-LocalUser -Name " + psq(build) + " }",
+		"try { Remove-LocalUser -Name " + psq(build) + " -ErrorAction Stop } catch { Set-LocalUser -Name " + psq(build) + " -Password " + lockedPassword + "; Disable-LocalUser -Name " + psq(build) + " }",
 		// The logon screen keeps showing the build account from these caches: its UserTile entry (one per SID, never the
 		// built-in administrator, -500) and the last logged-on user.
 		`if ($sid -and $sid -notlike '*-500') { Remove-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\UserTile' -Name $sid -ErrorAction SilentlyContinue }`,

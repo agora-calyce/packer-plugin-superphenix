@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/agora-calyce/packer-plugin-superphenix/internal/client"
 	"github.com/hashicorp/hcl/v2/hcldec"
@@ -107,6 +109,19 @@ type Config struct {
 	// Password of `winrm_final_username`. Pass it through a sensitive variable. It is never written to the
 	// image in clear text and is masked in the logs.
 	FinalPassword string `mapstructure:"winrm_final_password"`
+	// WinRM builds: run Sysprep (`/generalize /oobe /shutdown /quiet`) as the very last action, after
+	// `winrm_final_username` is set up. Sysprep removes the network adapter, so it is launched detached (one-shot
+	// SYSTEM task) and the plugin waits for the VM to shut down through the Superphenix API, not through WinRM.
+	// Off by default.
+	Sysprep bool `mapstructure:"sysprep"`
+	// Path, on the VM, of an unattend file for Sysprep (`/unattend:`), written beforehand by a provisioner, for
+	// example `C:\Windows\System32\Sysprep\unattend-sysprep.xml`. Needs `sysprep`. Without it, Sysprep runs without
+	// an answer file. Do not put `UserAccounts/AdministratorPassword` in it: it would overwrite the password set by
+	// `winrm_final_password`.
+	SysprepUnattend string `mapstructure:"sysprep_unattend"`
+	// How long to wait for Sysprep to shut the VM down. Default `30m`. If the VM stays up, Sysprep failed: see
+	// `C:\Windows\System32\Sysprep\Panther\setupact.log` on the VM.
+	SysprepTimeout time.Duration `mapstructure:"sysprep_timeout"`
 }
 
 func (c *Config) hasCD() bool { return len(c.CDFiles) > 0 || len(c.CDContent) > 0 }
@@ -139,6 +154,9 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 	}
 	if c.ISODiskSize == "" {
 		c.ISODiskSize = "8Gi"
+	}
+	if c.SysprepTimeout == 0 {
+		c.SysprepTimeout = 30 * time.Minute
 	}
 	if c.Comm.SSHUsername == "" && c.Comm.Type != "winrm" {
 		c.Comm.SSHUsername = "spx" // Superphenix's default cloud-init user
@@ -196,6 +214,15 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 		}
 		packersdk.LogSecretFilter.Set(c.FinalPassword)
 	}
+	if c.Sysprep && c.Comm.Type != "winrm" {
+		errs = append(errs, errors.New("sysprep needs communicator = \"winrm\""))
+	}
+	if !c.Sysprep && c.SysprepUnattend != "" {
+		errs = append(errs, errors.New("sysprep_unattend needs sysprep = true"))
+	}
+	if strings.Contains(c.SysprepUnattend, `"`) {
+		errs = append(errs, errors.New(`sysprep_unattend must not contain a double quote`))
+	}
 	for _, e := range c.Comm.Prepare(&interpolate.Context{}) {
 		errs = append(errs, e)
 	}
@@ -241,10 +268,8 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 				return &communicator.WinRMConfig{Username: c.Comm.WinRMUser, Password: c.Comm.WinRMPassword}, nil
 			}},
 		&commonsteps.StepProvision{},
-		stepFinalizeWindows{},
-		&stepStop{},
-		&stepDropISO{},
 	)
+	steps = append(steps, finishSteps()...)
 	r := commonsteps.NewRunner(steps, c.PackerConfig, ui)
 	r.Run(ctx, state)
 
